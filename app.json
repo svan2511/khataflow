@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "dukaan-sahayak-new",
-    "slug": "dukaan-sahayak-new",
+    "name": "KhataFlow",
+    "slug": "khataflow",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "dukaansahayaknew",
+    "scheme": "khataflow",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
@@ -38,7 +38,8 @@
             "backgroundColor": "#000000"
           }
         }
-      ]
+      ],
+      "expo-secure-store"
     ],
     "experiments": {
       "typedRoutes": true,
