@@ -30,6 +30,17 @@ const AuthContext = createContext<AuthContextType | null>(null);
 
 const TOKEN_KEY = 'auth_token';
 const USER_KEY = 'auth_user';
+const CLEAR_FLAG_KEY = 'force_clear_done';
+
+async function clearStaleAuth() {
+  const done = await SecureStore.getItemAsync(CLEAR_FLAG_KEY);
+  if (done) return;
+  await Promise.all([
+    SecureStore.deleteItemAsync(TOKEN_KEY),
+    SecureStore.deleteItemAsync(USER_KEY),
+  ]);
+  await SecureStore.setItemAsync(CLEAR_FLAG_KEY, '1');
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AuthState>({
@@ -39,7 +50,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   });
 
   useEffect(() => {
-    loadStoredAuth();
+    clearStaleAuth().then(loadStoredAuth);
 
     setUnauthorizedHandler(async () => {
       await SecureStore.deleteItemAsync(TOKEN_KEY);

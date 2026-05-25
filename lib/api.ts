@@ -1,10 +1,6 @@
-import { Platform } from 'react-native';
+const API_BASE = 'http://192.168.1.9:8000/api';
 
-const API_BASE = Platform.select({
-  android: 'http://192.168.1.9:8000/api',
-  ios: 'http://192.168.1.9:8000/api',
-  default: 'http://192.168.1.9:8000/api',
-});
+//const API_BASE = 'https://khata-flow-api.onrender.com/api';
 
 export interface ApiResponse<T = any> {
   success: boolean;
@@ -342,13 +338,14 @@ export const api = {
   },
 
   updateProfile(token: string, data: Record<string, any>) {
-    const body = data instanceof FormData ? data : JSON.stringify(data);
+    const isFormData = data instanceof FormData;
+    const body = isFormData ? data : JSON.stringify(data);
     const headers: Record<string, string> = {};
-    if (!(data instanceof FormData)) {
+    if (!isFormData) {
       headers['Content-Type'] = 'application/json';
     }
     return request<UserProfileData>('/user/profile', {
-      method: 'PUT',
+      method: isFormData ? 'POST' : 'PUT',
       body,
       headers,
     }, token);
@@ -472,7 +469,7 @@ export const api = {
 
   updateProductFull(token: string, uuid: string, formData: FormData) {
     return request<ProductData>('/products/' + uuid, {
-      method: 'PUT',
+      method: 'POST',
       body: formData,
     }, token);
   },
