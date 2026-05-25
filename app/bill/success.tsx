@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Animated } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
+import { File, Directory, Paths } from 'expo-file-system';
 import { Ionicons } from '@expo/vector-icons';
 import { Tokens, Typography, Spacing, BorderRadius } from '@/constants/theme';
 import { useAuth } from '@/lib/auth-context';
@@ -36,6 +37,8 @@ export default function BillSuccessScreen() {
   const scaleAnim = useRef(new Animated.Value(0)).current;
   const [sharing, setSharing] = useState(false);
   const [shopName, setShopName] = useState('KhataFlow');
+  const [shopLogoBase64, setShopLogoBase64] = useState('');
+  const [shopAddress, setShopAddress] = useState('');
   const insets = useSafeAreaInsets();
   const { token } = useAuth();
 
@@ -47,8 +50,23 @@ export default function BillSuccessScreen() {
       useNativeDriver: true,
     }).start();
     if (token) {
-      api.getProfile(token).then(res => {
-        if (res.data.shop?.shop_name) setShopName(res.data.shop.shop_name);
+      api.getProfile(token).then(async res => {
+        if (res.data.shop) {
+          const s = res.data.shop;
+          if (s.shop_name) setShopName(s.shop_name);
+          if (s.logo) {
+            try {
+              const destDir = new Directory(Paths.cache, 'success-shop-logos');
+              destDir.create({ intermediates: true, idempotent: true });
+              const destFile = new File(destDir, `logo-${Date.now()}.png`);
+              const file = await File.downloadFileAsync(s.logo, destFile);
+              const b64 = await file.base64();
+              setShopLogoBase64('data:image/png;base64,' + b64);
+            } catch (e) { console.error('Failed to load shop logo', e); }
+          }
+          const addr = [s.address, s.city, s.state, s.pincode].filter(Boolean).join(', ');
+          setShopAddress(addr);
+        }
       }).catch(() => {});
     }
   }, []);
@@ -62,12 +80,12 @@ export default function BillSuccessScreen() {
     setSharing(true);
     try {
       if (bill.customer?.phone) {
-        await shareOnWhatsApp(bill, shopName);
+        await shareOnWhatsApp(bill, shopName, shopLogoBase64 || undefined, shopAddress || undefined);
       } else {
-        await shareInvoicePdf(bill, shopName);
+        await shareInvoicePdf(bill, shopName, shopLogoBase64 || undefined, shopAddress || undefined);
       }
     } catch {
-      await shareInvoicePdf(bill, shopName).catch(() => {});
+      await shareInvoicePdf(bill, shopName, shopLogoBase64 || undefined, shopAddress || undefined).catch(() => {});
     } finally {
       setSharing(false);
     }

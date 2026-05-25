@@ -1,7 +1,8 @@
 import { useState, useCallback } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, StyleSheet, Image } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router, useFocusEffect } from 'expo-router';
+import { File, Directory, Paths } from 'expo-file-system';
 import { Ionicons } from '@expo/vector-icons';
 import { Tokens, Typography, Spacing, BorderRadius } from '@/constants/theme';
 import { api, type BillDetail } from '@/lib/api';
@@ -12,24 +13,23 @@ import { shareInvoicePdf, shareOnWhatsApp } from '@/lib/bill-pdf';
 
 function formatPaymentMethod(method: string): string {
   const map: Record<string, string> = {
-    cash: 'Cash',
-    upi: 'UPI',
-    card: 'Card',
-    credit: 'Credit (Udhaar)',
-    mix: 'Split Payment',
+    cash: 'Cash', upi: 'UPI', card: 'Card',
+    credit: 'Credit (Udhaar)', mix: 'Split Payment',
   };
   return map[method] || method;
 }
 
 function formatStatus(status: string): string {
   const map: Record<string, string> = {
-    paid: 'Paid',
-    partial: 'Partial',
-    pending: 'Pending',
-    cancelled: 'Cancelled',
+    paid: 'Paid', partial: 'Partial', pending: 'Pending', cancelled: 'Cancelled',
   };
   return map[status] || status;
 }
+
+const pmtIcons: Record<string, string> = {
+  cash: 'cash-outline', upi: 'phone-portrait-outline', card: 'card-outline',
+  credit: 'calendar-outline', mix: 'swap-horizontal-outline',
+};
 
 export default function BillDetailScreen() {
   const { uuid } = useLocalSearchParams<{ uuid: string }>();
@@ -39,6 +39,8 @@ export default function BillDetailScreen() {
   const [sharing, setSharing] = useState(false);
   const insets = useSafeAreaInsets();
   const [shopName, setShopName] = useState('KhataFlow');
+  const [shopLogoBase64, setShopLogoBase64] = useState('');
+  const [shopAddress, setShopAddress] = useState('');
 
   const loadBill = useCallback(async () => {
     if (!uuid || !token) return;
@@ -49,11 +51,23 @@ export default function BillDetailScreen() {
         api.getProfile(token).catch(() => null),
       ]);
       setBill(billRes.data);
-      if (profileRes?.data?.shop?.shop_name) {
-        setShopName(profileRes.data.shop.shop_name);
+      if (profileRes?.data?.shop) {
+        const s = profileRes.data.shop;
+        if (s.shop_name) setShopName(s.shop_name);
+        if (s.logo) {
+          try {
+            const destDir = new Directory(Paths.cache, 'detail-shop-logos');
+            destDir.create({ intermediates: true, idempotent: true });
+            const destFile = new File(destDir, `logo-${Date.now()}.png`);
+            const file = await File.downloadFileAsync(s.logo, destFile);
+            const b64 = await file.base64();
+            setShopLogoBase64('data:image/png;base64,' + b64);
+          } catch (e) { console.error('Failed to load shop logo', e); }
+        }
+        const addr = [s.address, s.city, s.state, s.pincode].filter(Boolean).join(', ');
+        setShopAddress(addr);
       }
     } catch {
-      // handle error
     } finally {
       setLoading(false);
     }
@@ -70,12 +84,12 @@ export default function BillDetailScreen() {
     setSharing(true);
     try {
       if (bill.customer?.phone) {
-        await shareOnWhatsApp(bill, shopName);
+        await shareOnWhatsApp(bill, shopName, shopLogoBase64 || undefined, shopAddress || undefined);
       } else {
-        await shareInvoicePdf(bill, shopName);
+        await shareInvoicePdf(bill, shopName, shopLogoBase64 || undefined, shopAddress || undefined);
       }
     } catch {
-      await shareInvoicePdf(bill, shopName).catch(() => {});
+      await shareInvoicePdf(bill, shopName, shopLogoBase64 || undefined, shopAddress || undefined).catch(() => {});
     } finally {
       setSharing(false);
     }
@@ -83,15 +97,15 @@ export default function BillDetailScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.safeArea} edges={['top']}>
+      <SafeAreaView style={styles.safe} edges={['top']}>
         <View style={styles.topBar}>
-          <TouchableOpacity style={styles.iconButton} onPress={() => router.back()}>
-            <Ionicons name="arrow-back" size={24} color={Tokens['on-surface-variant']} />
+          <TouchableOpacity style={styles.iconBtn} onPress={() => router.back()}>
+            <Ionicons name="arrow-back" size={22} color={Tokens['on-surface-variant']} />
           </TouchableOpacity>
-          <Text style={styles.topBarTitle}>Bill Detail</Text>
-          <View style={{ width: 48 }} />
+          <Text style={styles.topTitle}>Bill Detail</Text>
+          <View style={{ width: 40 }} />
         </View>
-        <View style={styles.centerLoader}>
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
           <FullScreenLoader />
         </View>
       </SafeAreaView>
@@ -100,15 +114,15 @@ export default function BillDetailScreen() {
 
   if (!bill) {
     return (
-      <SafeAreaView style={styles.safeArea} edges={['top']}>
+      <SafeAreaView style={styles.safe} edges={['top']}>
         <View style={styles.topBar}>
-          <TouchableOpacity style={styles.iconButton} onPress={() => router.back()}>
-            <Ionicons name="arrow-back" size={24} color={Tokens['on-surface-variant']} />
+          <TouchableOpacity style={styles.iconBtn} onPress={() => router.back()}>
+            <Ionicons name="arrow-back" size={22} color={Tokens['on-surface-variant']} />
           </TouchableOpacity>
-          <Text style={styles.topBarTitle}>Bill Detail</Text>
-          <View style={{ width: 48 }} />
+          <Text style={styles.topTitle}>Bill Detail</Text>
+          <View style={{ width: 40 }} />
         </View>
-        <View style={styles.centerLoader}>
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
           <Text style={{ color: Tokens['on-surface-variant'] }}>Bill not found</Text>
         </View>
       </SafeAreaView>
@@ -116,162 +130,188 @@ export default function BillDetailScreen() {
   }
 
   const isPaid = bill.payment_status === 'paid';
-  const statusIcon = isPaid ? 'checkmark-circle' : 'time';
   const statusColor = isPaid ? Tokens.secondary : Tokens.tertiary;
+  const statusBg = isPaid ? Tokens['secondary-fixed'] : Tokens['tertiary-fixed'];
   const statusText = formatStatus(bill.payment_status);
 
+  const billDate = new Date(bill.created_at);
+  const dateStr = billDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+  const timeStr = billDate.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top']}>
+    <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.topBar}>
-        <TouchableOpacity style={styles.iconButton} onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={24} color={Tokens['on-surface-variant']} />
+        <TouchableOpacity style={styles.iconBtn} onPress={() => router.back()}>
+          <Ionicons name="arrow-back" size={22} color={Tokens['on-surface-variant']} />
         </TouchableOpacity>
-        <Text style={styles.topBarTitle}>Bill {bill.bill_number}</Text>
-        <TouchableOpacity style={styles.iconButton}>
-          <Ionicons name="ellipsis-vertical" size={22} color={Tokens['on-surface-variant']} />
+        <Text style={styles.topTitle}>Bill {bill.bill_number}</Text>
+        <TouchableOpacity style={styles.iconBtn}>
+          <Ionicons name="ellipsis-vertical" size={20} color={Tokens['on-surface-variant']} />
         </TouchableOpacity>
       </View>
 
-      <ScrollView style={styles.scrollArea} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        <View style={[styles.statusBanner, { backgroundColor: isPaid ? Tokens['secondary-fixed'] : Tokens['tertiary-fixed'] }]}>
-          <Ionicons name={statusIcon as any} size={24} color={statusColor} />
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.statusBannerTitle, { color: statusColor }]}>{statusText}</Text>
-            <Text style={styles.statusBannerSubtext}>
-              {bill.payment_method === 'credit' ? 'Udhaar' : formatPaymentMethod(bill.payment_method)}
-              {bill.due_amount > 0 ? ` · Paid ₹${bill.paid_amount} · Due ₹${bill.due_amount}` : ''}
-            </Text>
-          </View>
-        </View>
-
-        <View style={styles.billCard}>
-          <View style={styles.storeSection}>
-            <View style={styles.storeIcon}>
-              <Ionicons name="storefront" size={24} color={Tokens['primary-container']} />
-            </View>
-            <View>
-              <Text style={styles.storeName}>{shopName}</Text>
-            </View>
-          </View>
-
-          <View style={styles.metaGrid}>
-            {[
-              { label: 'Bill No.', value: bill.bill_number },
-              { label: 'Date', value: new Date(bill.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) },
-              { label: 'Time', value: new Date(bill.created_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) },
-              { label: 'Payment', value: formatPaymentMethod(bill.payment_method) },
-            ].map((item, i) => (
-              <View key={i} style={{ minWidth: '45%' }}>
-                <Text style={styles.metaLabel}>{item.label}</Text>
-                <Text style={styles.metaValue}>{item.value}</Text>
-              </View>
-            ))}
-          </View>
-
-          <View style={styles.customerRow}>
-            <Ionicons name="person-outline" size={18} color={Tokens['on-surface-variant']} />
-            <View>
-              <Text style={styles.sectionLabel}>Customer</Text>
-              <Text style={styles.sectionValue}>{bill.customer?.name || 'Walk-in Customer'}</Text>
-              {bill.customer?.phone && (
-                <Text style={styles.customerPhone}>{bill.customer.phone}</Text>
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        <View style={styles.hero}>
+          <View style={styles.heroTop}>
+            <View style={styles.heroLeft}>
+              {shopLogoBase64 ? (
+                <Image source={{ uri: shopLogoBase64 }} style={styles.heroLogo} />
+              ) : (
+                <View style={styles.heroLogoPlaceholder}>
+                  <Ionicons name="storefront" size={24} color="#fff" />
+                </View>
               )}
+              <View style={{ flex: 1 }}>
+                <Text style={styles.heroShopName}>{shopName}</Text>
+                {shopAddress ? <Text style={styles.heroAddress}>{shopAddress}</Text> : null}
+              </View>
+            </View>
+            <View style={[styles.heroBadge, { backgroundColor: statusBg }]}>
+              <Text style={[styles.heroBadgeText, { color: statusColor }]}>{statusText}</Text>
             </View>
           </View>
-
-          <View style={styles.itemsSection}>
-            <Text style={styles.sectionLabel}>Items ({bill.items.length})</Text>
-            {bill.items.map((item, i) => (
-              <View key={item.id || i} style={[styles.itemRow, i < bill.items.length - 1 && styles.itemRowBorder]}>
-                <View style={{ flex: 1, minWidth: 0 }}>
-                  <Text style={styles.itemName}>{item.product_name}</Text>
-                  <Text style={styles.itemSubtext}>{item.quantity} × ₹{item.unit_price}</Text>
-                </View>
-                <Text style={styles.itemTotal}>₹{item.total}</Text>
+          <View style={styles.heroDivider} />
+          <View style={styles.heroMeta}>
+            {[
+              { icon: 'receipt-outline', label: 'Bill No.', value: bill.bill_number },
+              { icon: 'calendar-outline', label: 'Date', value: dateStr },
+              { icon: 'time-outline', label: 'Time', value: timeStr },
+            ].map((item, i) => (
+              <View key={i} style={styles.heroMetaItem}>
+                <Ionicons name={item.icon as any} size={16} color="rgba(255,255,255,0.7)" />
+                <Text style={styles.heroMetaLabel}>{item.label}</Text>
+                <Text style={styles.heroMetaValue}>{item.value}</Text>
               </View>
             ))}
           </View>
+        </View>
 
-          <View style={styles.summarySection}>
-            <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Subtotal</Text>
-              <Text style={styles.summaryValue}>₹{bill.subtotal}</Text>
+        <View style={styles.card}>
+          <View style={styles.customerRow}>
+            <View style={styles.customerAvatar}>
+              <Text style={styles.customerInitial}>
+                {(bill.customer?.name || 'W').charAt(0).toUpperCase()}
+              </Text>
             </View>
-            {bill.discount > 0 && (
-              <View style={styles.summaryRow}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                  <Text style={styles.summaryLabel}>Discount</Text>
-                  <View style={styles.discountBadge}>
-                    <Text style={styles.discountText}>{bill.discount_type === 'percentage' ? `${bill.discount_value}% OFF` : `₹${bill.discount_value} OFF`}</Text>
+            <View style={{ flex: 1 }}>
+              <View style={styles.customerNameRow}>
+                <Text style={styles.value}>{bill.customer?.name || 'Walk-in Customer'}</Text>
+                {bill.customer?.phone ? (
+                  <View style={styles.phoneInline}>
+                    <Ionicons name="call-outline" size={12} color="#006b59" />
+                    <Text style={styles.phoneText}>{bill.customer.phone}</Text>
                   </View>
-                </View>
-                <Text style={[styles.summaryValue, { color: Tokens.secondary }]}>-₹{bill.discount}</Text>
+                ) : null}
               </View>
-            )}
-            <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>GST</Text>
-              <Text style={styles.summaryValue}>₹{bill.tax}</Text>
             </View>
-            <View style={[styles.summaryRow, styles.totalRow]}>
-              <Text style={styles.totalLabel}>Total Amount</Text>
-              <Text style={styles.totalValue}>₹{bill.total}</Text>
-            </View>
-            <View style={styles.summaryRow}>
-              <Text style={[styles.summaryLabel, { color: Tokens.secondary }]}>Paid</Text>
-              <Text style={[styles.summaryValue, { color: Tokens.secondary, fontWeight: '700' }]}>₹{bill.paid_amount}</Text>
-            </View>
-            {bill.due_amount > 0 && (
-              <View style={styles.dueRow}>
-                <Text style={styles.dueLabel}>Due (Udhaar)</Text>
-                <Text style={styles.dueValue}>₹{bill.due_amount}</Text>
-              </View>
-            )}
           </View>
         </View>
 
-      {bill.payments && bill.payments.length > 0 && (
-        <View style={styles.paymentHistory}>
-          <Text style={styles.payHistTitle}>Payment History</Text>
-          <View style={styles.payHistList}>
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>
+            Items <Text style={{ color: Tokens['on-surface-variant'], fontWeight: '400' }}>({bill.items.length})</Text>
+          </Text>
+          {bill.items.map((item, i) => (
+            <View key={item.id || i} style={[styles.itemRow, i < bill.items.length - 1 && styles.itemBorder]}>
+              <View style={styles.itemDot} />
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={styles.itemName}>{item.product_name}</Text>
+                <Text style={styles.itemQty}>{item.quantity} × ₹{item.unit_price}</Text>
+              </View>
+              <Text style={styles.itemTotal}>₹{item.total}</Text>
+            </View>
+          ))}
+        </View>
+
+        <View style={styles.card}>
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryLabel}>Subtotal</Text>
+            <Text style={styles.summaryValue}>₹{bill.subtotal}</Text>
+          </View>
+          {bill.discount > 0 && (
+            <View style={styles.summaryRow}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Text style={styles.summaryLabel}>Discount</Text>
+                <View style={styles.discountBadge}>
+                  <Text style={styles.discountText}>
+                    {bill.discount_type === 'percentage' ? `${bill.discount_value}% OFF` : `₹${bill.discount_value} OFF`}
+                  </Text>
+                </View>
+              </View>
+              <Text style={[styles.summaryValue, { color: Tokens.secondary }]}>−₹{bill.discount}</Text>
+            </View>
+          )}
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryLabel}>GST</Text>
+            <Text style={styles.summaryValue}>₹{bill.tax}</Text>
+          </View>
+          <View style={styles.totalRow}>
+            <Text style={styles.totalLabel}>Total Amount</Text>
+            <Text style={styles.totalValue}>₹{bill.total}</Text>
+          </View>
+          <View style={styles.summaryRow}>
+            <Text style={[styles.summaryLabel, { color: Tokens.secondary }]}>Paid</Text>
+            <Text style={[styles.summaryValue, { color: Tokens.secondary, fontWeight: '700' }]}>₹{bill.paid_amount}</Text>
+          </View>
+          {bill.due_amount > 0 && (
+            <View style={styles.dueRow}>
+              <Ionicons name="alert-circle" size={18} color={Tokens.tertiary} />
+              <Text style={styles.dueLabel}>Due (Udhaar)</Text>
+              <Text style={styles.dueValue}>₹{bill.due_amount}</Text>
+            </View>
+          )}
+        </View>
+
+        {bill.payments && bill.payments.length > 0 && (
+          <View style={styles.card}>
+            <Text style={styles.sectionTitle}>Payment History</Text>
             {bill.payments.map((p, idx) => {
               const pmtDate = p.payment_date ? new Date(p.payment_date) : null;
               return (
-                <View key={p.id || idx} style={styles.payHistItem}>
-                  <View style={styles.payHistDot} />
+                <View key={p.id || idx} style={styles.payItem}>
+                  <View style={styles.payTimeline}>
+                    <View style={styles.payDot} />
+                    {idx < bill.payments.length - 1 ? <View style={styles.payLine} /> : null}
+                  </View>
                   <View style={{ flex: 1 }}>
-                    <View style={styles.payHistRow}>
-                      <Text style={styles.payHistMethod}>{formatPaymentMethod(p.payment_method)}</Text>
-                      <Text style={styles.payHistAmount}>+₹{Number(p.amount).toFixed(2)}</Text>
+                    <View style={styles.payTop}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <Ionicons name={pmtIcons[p.payment_method] as any || 'cash-outline'} size={14} color={Tokens.secondary} />
+                        <Text style={styles.payMethod}>{formatPaymentMethod(p.payment_method)}</Text>
+                      </View>
+                      <Text style={styles.payAmount}>+₹{Number(p.amount).toFixed(2)}</Text>
                     </View>
                     {pmtDate ? (
-                      <Text style={styles.payHistDate}>
+                      <Text style={styles.payDate}>
                         {pmtDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                       </Text>
                     ) : null}
-                    {p.reference ? <Text style={styles.payHistRef}>Ref: {p.reference}</Text> : null}
+                    {p.reference ? <Text style={styles.payRef}>Ref: {p.reference}</Text> : null}
                   </View>
                 </View>
               );
             })}
           </View>
-        </View>
-      )}
+        )}
 
-      {bill.notes ? (
-        <View style={styles.notesCard}>
-          <Ionicons name="document-text-outline" size={18} color={Tokens['on-surface-variant']} />
-          <View style={{ flex: 1 }}>
-            <Text style={styles.sectionLabel}>Notes</Text>
+        {bill.notes ? (
+          <View style={styles.card}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+              <View style={styles.notesIcon}>
+                <Ionicons name="document-text" size={16} color={Tokens.secondary} />
+              </View>
+              <Text style={styles.sectionTitle}>Notes</Text>
+            </View>
             <Text style={styles.notesText}>{bill.notes}</Text>
           </View>
-        </View>
-      ) : null}
-      <View style={{ height: 80 }} />
+        ) : null}
+
+        <View style={{ height: 100 }} />
       </ScrollView>
 
-      <View style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom, Spacing.md) }]}>
+      <View style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom, 16) }]}>
         <TouchableOpacity
-          style={[styles.shareBtn, sharing && styles.shareBtnDisabled]}
+          style={[styles.shareBtn, sharing && { opacity: 0.7 }]}
           activeOpacity={0.9}
           onPress={handleShare}
           disabled={sharing}
@@ -279,7 +319,7 @@ export default function BillDetailScreen() {
           {sharing ? (
             <Loader size={20} color="#fff" />
           ) : (
-            <Ionicons name="logo-whatsapp" size={20} color="#fff" />
+            <Ionicons name="logo-whatsapp" size={22} color="#fff" />
           )}
           <Text style={styles.shareBtnText}>
             {sharing ? 'Generating PDF...' : 'Share Invoice'}
@@ -291,103 +331,120 @@ export default function BillDetailScreen() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: Tokens.background },
+  safe: { flex: 1, backgroundColor: '#f5f7fa' },
   topBar: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: Spacing.gutter, height: 56, backgroundColor: Tokens.surface,
-    borderBottomWidth: 1, borderBottomColor: Tokens['outline-variant'],
+    paddingHorizontal: 20, height: 64, backgroundColor: '#fff',
   },
-  iconButton: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center', borderRadius: BorderRadius.full },
-  topBarTitle: { fontSize: Typography['headline-sm'].fontSize, fontWeight: Typography['headline-sm'].fontWeight as any, color: Tokens['on-surface'] },
-  centerLoader: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  scrollArea: { flex: 1 },
-  scrollContent: { padding: Spacing.gutter, paddingBottom: 100, gap: Spacing.md },
-  statusBanner: {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
-    borderRadius: BorderRadius.xl, padding: Spacing.md,
+  iconBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 20 },
+  topTitle: { fontSize: 18, fontWeight: '700', color: '#1c1c1e', fontFamily: 'Lexend-SemiBold' },
+  scroll: { flex: 1 },
+  scrollContent: { padding: 16, paddingTop: 12, paddingBottom: 100, gap: 14 },
+
+  hero: {
+    backgroundColor: '#006b59', borderRadius: 20, padding: 20, overflow: 'hidden',
+    shadowColor: '#006b59', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.3, shadowRadius: 16, elevation: 6,
   },
-  statusBannerTitle: { fontSize: Typography['label-lg'].fontSize, fontWeight: Typography['label-lg'].fontWeight as any },
-  statusBannerSubtext: { fontSize: Typography['body-md'].fontSize, color: Tokens['on-surface-variant'] },
-  billCard: {
-    backgroundColor: Tokens['surface-container-lowest'], borderRadius: BorderRadius.xl,
-    overflow: 'hidden', shadowColor: Tokens['surface-tint'], shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.12, shadowRadius: 20, elevation: 3,
+  heroTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
+  heroLeft: { flexDirection: 'row', alignItems: 'center', gap: 14, flex: 1, minWidth: 0 },
+  heroLogo: {
+    width: 48, height: 48, borderRadius: 24,
+    borderWidth: 2, borderColor: 'rgba(255,255,255,0.4)',
   },
-  storeSection: {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
-    padding: Spacing.md, borderBottomWidth: 1, borderBottomColor: Tokens['outline-variant'],
+  heroLogoPlaceholder: {
+    width: 48, height: 48, borderRadius: 24,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 2, borderColor: 'rgba(255,255,255,0.25)',
   },
-  storeIcon: {
-    width: 40, height: 40, borderRadius: BorderRadius.xl,
-    backgroundColor: Tokens['primary-container'], alignItems: 'center', justifyContent: 'center',
+  heroShopName: { fontSize: 18, fontWeight: '700', color: '#fff', fontFamily: 'Lexend-SemiBold' },
+  heroAddress: { fontSize: 12, color: 'rgba(255,255,255,0.7)', marginTop: 3, lineHeight: 16 },
+  heroBadge: { paddingHorizontal: 12, paddingVertical: 5, borderRadius: 20, marginLeft: 10 },
+  heroBadgeText: { fontSize: 12, fontWeight: '700' },
+  heroDivider: { height: 1, backgroundColor: 'rgba(255,255,255,0.15)', marginVertical: 16 },
+  heroMeta: { flexDirection: 'row', justifyContent: 'space-between' },
+  heroMetaItem: { alignItems: 'center', gap: 4, flex: 1, minWidth: 0 },
+  heroMetaLabel: { fontSize: 9, fontWeight: '600', color: 'rgba(255,255,255,0.6)', textTransform: 'uppercase', letterSpacing: 0.5 },
+  heroMetaValue: { fontSize: 11, fontWeight: '600', color: '#fff', textAlign: 'center' },
+
+  card: {
+    backgroundColor: '#fff', borderRadius: 16, padding: 16,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 4, elevation: 1,
   },
-  storeName: { fontSize: Typography['label-lg'].fontSize, fontWeight: Typography['label-lg'].fontWeight as any, color: Tokens['on-surface'] },
-  metaGrid: {
-    flexDirection: 'row', flexWrap: 'wrap', padding: Spacing.md, gap: Spacing.sm,
-    borderBottomWidth: 1, borderBottomColor: Tokens['outline-variant'],
+
+  customerRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  customerAvatar: {
+    width: 44, height: 44, borderRadius: 22,
+    backgroundColor: '#006b59', alignItems: 'center', justifyContent: 'center',
   },
-  metaLabel: { fontSize: Typography['label-md'].fontSize, fontWeight: Typography['label-md'].fontWeight as any, color: Tokens['on-surface-variant'] },
-  metaValue: { fontSize: Typography['body-lg'].fontSize, color: Tokens['on-surface'], fontWeight: '500' },
-  customerRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
-    padding: Spacing.md, borderBottomWidth: 1, borderBottomColor: Tokens['outline-variant'],
+  customerInitial: { fontSize: 18, fontWeight: '700', color: '#fff' },
+  customerNameRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
   },
-  sectionLabel: { fontSize: Typography['label-md'].fontSize, fontWeight: Typography['label-md'].fontWeight as any, color: Tokens['on-surface-variant'] },
-  sectionValue: { fontSize: Typography['body-lg'].fontSize, color: Tokens['on-surface'], fontWeight: '500' },
-  customerPhone: { fontSize: Typography['body-md'].fontSize, color: Tokens['on-surface-variant'], marginTop: 2 },
-  itemsSection: { padding: Spacing.md, borderBottomWidth: 1, borderBottomColor: Tokens['outline-variant'], gap: Spacing.sm },
-  itemRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: Spacing.base },
-  itemRowBorder: { borderBottomWidth: 1, borderBottomColor: Tokens['outline-variant'] },
-  itemName: { fontSize: Typography['body-md'].fontSize, color: Tokens['on-surface'] },
-  itemSubtext: { fontSize: Typography['label-md'].fontSize, color: Tokens['on-surface-variant'] },
-  itemTotal: { fontSize: Typography['headline-sm'].fontSize, fontWeight: '600', color: Tokens['on-surface'] },
-  summarySection: { padding: Spacing.md, gap: Spacing.sm },
-  summaryRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  summaryLabel: { fontSize: Typography['body-md'].fontSize, color: Tokens['on-surface-variant'] },
-  summaryValue: { fontSize: Typography['body-lg'].fontSize, color: Tokens['on-surface'] },
-  discountBadge: { backgroundColor: Tokens['secondary-fixed'], paddingHorizontal: 6, paddingVertical: 2, borderRadius: BorderRadius.full },
-  discountText: { fontSize: 10, fontWeight: '600', color: Tokens['on-secondary-fixed'] },
-  totalRow: { borderTopWidth: 1, borderTopColor: Tokens['outline-variant'], paddingTop: Spacing.sm },
-  totalLabel: { fontSize: Typography['headline-sm'].fontSize, fontWeight: '700', color: Tokens['on-surface'] },
-  totalValue: { fontSize: Typography['headline-md'].fontSize, fontWeight: '700', color: Tokens.secondary },
-  dueRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: Spacing.sm, backgroundColor: Tokens['tertiary-fixed'], padding: Spacing.sm, borderRadius: BorderRadius.lg },
-  dueLabel: { fontSize: Typography['label-lg'].fontSize, fontWeight: '700', color: Tokens.tertiary },
-  dueValue: { fontSize: Typography['headline-sm'].fontSize, fontWeight: '700', color: Tokens.tertiary },
-  notesCard: {
-    flexDirection: 'row', alignItems: 'flex-start', gap: 10,
-    backgroundColor: Tokens['surface-container-lowest'], borderRadius: BorderRadius.xl,
-    padding: Spacing.md, shadowColor: Tokens['surface-tint'], shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.12, shadowRadius: 20, elevation: 3,
+  label: { fontSize: 12, fontWeight: '600', color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.3 },
+  value: { fontSize: 16, fontWeight: '600', color: '#1c1c1e' },
+  phoneInline: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  phoneText: { fontSize: 14, color: '#006b59', fontWeight: '500' },
+
+  sectionTitle: { fontSize: 13, fontWeight: '700', color: '#1c1c1e', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.5 },
+
+  itemRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 12 },
+  itemBorder: { borderBottomWidth: 1, borderBottomColor: '#f3f4f6' },
+  itemDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#a7f3d0' },
+  itemName: { fontSize: 15, fontWeight: '600', color: '#1c1c1e' },
+  itemQty: { fontSize: 12, color: '#6b7280', marginTop: 1 },
+  itemTotal: { fontSize: 17, fontWeight: '700', color: '#1c1c1e' },
+
+  summaryRow: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingVertical: 6,
   },
-  notesText: { fontSize: Typography['body-md'].fontSize, color: Tokens['on-surface'] },
+  summaryLabel: { fontSize: 14, color: '#6b7280' },
+  summaryValue: { fontSize: 15, fontWeight: '600', color: '#1c1c1e' },
+  discountBadge: { backgroundColor: '#f0fdf4', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 10 },
+  discountText: { fontSize: 10, fontWeight: '700', color: '#006b59' },
+  totalRow: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    marginTop: 4, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#f3f4f6',
+  },
+  totalLabel: { fontSize: 16, fontWeight: '700', color: '#1c1c1e' },
+  totalValue: { fontSize: 22, fontWeight: '800', color: '#006b59', letterSpacing: -0.3 },
+  dueRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: '#fffbeb', padding: 12,
+    borderRadius: 12, marginTop: 8,
+  },
+  dueLabel: { flex: 1, fontSize: 14, fontWeight: '700', color: '#d97706' },
+  dueValue: { fontSize: 17, fontWeight: '700', color: '#d97706' },
+
+  payItem: { flexDirection: 'row', gap: 12, marginTop: 12 },
+  payTimeline: { alignItems: 'center', width: 14 },
+  payDot: {
+    width: 12, height: 12, borderRadius: 6,
+    backgroundColor: '#006b59', borderWidth: 2, borderColor: '#d1fae5',
+  },
+  payLine: { width: 2, flex: 1, backgroundColor: '#e5e7eb', marginTop: 4 },
+  payTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  payMethod: { fontSize: 14, fontWeight: '600', color: '#1c1c1e' },
+  payAmount: { fontSize: 15, fontWeight: '700', color: '#006b59' },
+  payDate: { fontSize: 12, color: '#6b7280', marginTop: 2, marginLeft: 20 },
+  payRef: { fontSize: 11, color: '#6b7280', marginTop: 1, fontStyle: 'italic', marginLeft: 20 },
+
+  notesIcon: {
+    width: 28, height: 28, borderRadius: 14,
+    backgroundColor: '#f0fdf4', alignItems: 'center', justifyContent: 'center',
+  },
+  notesText: { fontSize: 14, color: '#1c1c1e', lineHeight: 20 },
+
   bottomBar: {
     position: 'absolute', bottom: 0, left: 0, right: 0,
-    backgroundColor: Tokens['surface-container-lowest'],
-    borderTopWidth: 1, borderTopColor: Tokens['outline-variant'],
-    paddingHorizontal: Spacing.gutter, paddingVertical: Spacing.sm, paddingBottom: Spacing.md,
+    backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: '#f3f4f6',
+    paddingHorizontal: 16, paddingVertical: 10,
   },
-  paymentHistory: {
-    backgroundColor: Tokens['surface-container-lowest'], borderRadius: BorderRadius.xl,
-    padding: Spacing.md, shadowColor: Tokens['surface-tint'], shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.12, shadowRadius: 20, elevation: 3,
-  },
-  payHistTitle: { fontSize: Typography['label-md'].fontSize, fontWeight: Typography['label-md'].fontWeight as any, color: Tokens['on-surface-variant'], textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: Spacing.md },
-  payHistList: { gap: Spacing.md },
-  payHistItem: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
-  payHistDot: {
-    width: 10, height: 10, borderRadius: 5, backgroundColor: Tokens.secondary,
-    marginTop: 5,
-  },
-  payHistRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  payHistMethod: { fontSize: Typography['body-md'].fontSize, fontWeight: '600', color: Tokens['on-surface'] },
-  payHistAmount: { fontSize: Typography['body-lg'].fontSize, fontWeight: '700', color: Tokens.secondary },
-  payHistDate: { fontSize: Typography['label-md'].fontSize, color: Tokens['on-surface-variant'], marginTop: 1 },
-  payHistRef: { fontSize: 11, color: Tokens['on-surface-variant'], marginTop: 1, fontStyle: 'italic' },
   shareBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
-    height: 56, backgroundColor: '#25D366', borderRadius: BorderRadius.xl,
-    shadowColor: '#25D366', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.35, shadowRadius: 12, elevation: 6,
+    height: 54, backgroundColor: '#25D366', borderRadius: 16,
+    shadowColor: '#25D366', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 12, elevation: 6,
   },
-  shareBtnDisabled: { opacity: 0.7 },
-  shareBtnText: { fontSize: Typography['label-lg'].fontSize, fontWeight: Typography['label-lg'].fontWeight as any, color: '#fff' },
+  shareBtnText: { fontSize: 16, fontWeight: '700', color: '#fff' },
 });

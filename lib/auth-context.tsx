@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
 import * as SecureStore from 'expo-secure-store';
+import { router } from 'expo-router';
 import { api, setUnauthorizedHandler } from './api';
 
 interface User {
@@ -56,6 +57,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await SecureStore.deleteItemAsync(TOKEN_KEY);
       await SecureStore.deleteItemAsync(USER_KEY);
       setState({ token: null, user: null, isLoading: false });
+      router.replace('/login');
     });
 
     return () => setUnauthorizedHandler(() => {});
@@ -100,11 +102,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } catch {
         // ignore logout API errors
       }
-      setUnauthorizedHandler(async () => {
-        await SecureStore.deleteItemAsync(TOKEN_KEY);
-        await SecureStore.deleteItemAsync(USER_KEY);
-        setState({ token: null, user: null, isLoading: false });
-      });
     }
 
     await Promise.all([
@@ -113,6 +110,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     ]);
 
     setState({ token: null, user: null, isLoading: false });
+    router.replace('/login');
   }, [state.token]);
 
   const forceSignOut = useCallback(async () => {
@@ -122,6 +120,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       SecureStore.deleteItemAsync(USER_KEY),
     ]);
     setState({ token: null, user: null, isLoading: false });
+    router.replace('/login');
   }, []);
 
   const setUser = useCallback((user: User) => {

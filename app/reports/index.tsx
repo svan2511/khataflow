@@ -1,9 +1,11 @@
-import { useState, useEffect, useCallback } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, StyleSheet, ActivityIndicator, RefreshControl } from 'react-native';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { View, Text, Image, TouchableOpacity, ScrollView, StyleSheet, ActivityIndicator, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
+import * as FileSystem from 'expo-file-system';
+import { File, Directory, Paths } from 'expo-file-system';
 import { Ionicons } from '@expo/vector-icons';
 import { Tokens, Spacing } from '@/constants/theme';
 import { useAuth } from '@/lib/auth-context';
@@ -19,6 +21,12 @@ export default function ReportsScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const exportingRef = useRef(false);
+  const [shopName, setShopName] = useState('');
+  const [shopLogo, setShopLogo] = useState('');
+  const [shopAddress, setShopAddress] = useState('');
+  const [shopLogoBase64, setShopLogoBase64] = useState('');
+  const [brandLogoBase64, setBrandLogoBase64] = useState('');
 
   const fetchReport = useCallback(async (showLoader?: boolean) => {
     if (!token) return;
@@ -44,6 +52,28 @@ export default function ReportsScreen() {
 
   useEffect(() => {
     fetchReport(true);
+    api.getProfile(token!).then(r => {
+      if (r.data.shop) {
+        const s = r.data.shop;
+        setShopName(s.shop_name);
+        setShopLogo(s.logo || '');
+        const addr = [s.address, s.city, s.state, s.pincode].filter(Boolean).join(', ');
+        setShopAddress(addr);
+        if (s.logo) {
+          const destDir = new Directory(Paths.cache, 'shop-logos');
+          destDir.create({ intermediates: true, idempotent: true });
+          const destFile = new File(destDir, `logo-${Date.now()}.png`);
+          File.downloadFileAsync(s.logo, destFile)
+            .then(file => file.base64())
+            .then(b64 => setShopLogoBase64('data:image/png;base64,' + b64))
+            .catch(e => console.error('Failed to load shop logo', e));
+        }
+      }
+    }).catch(() => {});
+    const asset = Image.resolveAssetSource(require('@/assets/images/logo.png'));
+    FileSystem.readAsStringAsync(asset.uri, { encoding: 'base64' })
+      .then(b64 => setBrandLogoBase64('data:image/png;base64,' + b64))
+      .catch(() => {});
   }, [fetchReport]);
 
   const onRefresh = () => {
@@ -59,9 +89,9 @@ export default function ReportsScreen() {
     ? dailyReport?.total_bills ?? 0
     : monthlyReport?.current_month.total_bills ?? 0;
 
-  const avgBillValue = period === 'daily'
-    ? dailyReport?.average_bill_value ?? 0
-    : monthlyReport?.current_month.average_per_day ?? 0;
+  const totalCredit = period === 'daily'
+    ? dailyReport?.total_credit ?? 0
+    : monthlyReport?.current_month.total_credit ?? 0;
 
   const paymentBreakdown = period === 'daily'
     ? dailyReport?.payment_breakdown
@@ -73,51 +103,142 @@ export default function ReportsScreen() {
 
   const growth = monthlyReport?.comparison.sales_growth_percentage;
 
-  const label = period === 'daily' ? '/bill' : '/day';
-
   const handleExportPDF = async () => {
+    if (exportingRef.current) return;
+    exportingRef.current = true;
     setExporting(true);
     try {
       const now = new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' });
-      const rows = topProducts.length > 0 ? topProducts.map((p, i) =>
-        `<tr><td>${i + 1}</td><td>${p.product_name}</td><td>${Number(p.total_quantity)} ${displayUnit(p.unit)}</td><td>₹${Number(p.total_revenue).toLocaleString('en-IN')}</td></tr>`
-      ).join('') : '<tr><td colspan="4">No data</td></tr>';
+      const label = period === 'daily' ? 'Daily' : 'Monthly';
+      const today = new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
-      const html = `
+      const topRows = topProducts.length > 0 ? topProducts.map((p, i) =>
+        `<tr>
+          <td style="text-align:center;padding:12px 14px;border-bottom:1px solid #f3f4f6;color:#6b7280;font-size:13px;width:40px">${i + 1}</td>
+          <td style="padding:12px 14px;border-bottom:1px solid #f3f4f6;color:#111827;font-size:14px;font-weight:600">${p.product_name}</td>
+          <td style="text-align:center;padding:12px 14px;border-bottom:1px solid #f3f4f6;color:#6b7280;font-size:13px">${Number(p.total_quantity)} ${displayUnit(p.unit)}</td>
+          <td style="text-align:right;padding:12px 14px;border-bottom:1px solid #f3f4f6;color:#111827;font-size:14px;font-weight:700">₹${Number(p.total_revenue).toLocaleString('en-IN')}</td>
+        </tr>`
+      ).join('') : '<tr><td colspan="4" style="text-align:center;padding:28px;color:#9ca3af;font-size:14px">No product data for this period</td></tr>';
+
+      const headerLogo = shopLogoBase64;
+      const brandLogo = brandLogoBase64;
+      const logoHtml = headerLogo ? `<img src="${headerLogo}" style="height:48px;width:auto" />` : '';
+      const watermarkHtml = brandLogo
+        ? `<div class="watermark"><img src="${brandLogo}" /><div class="watermark-tagline">Smart dukan · Smart hisaab</div></div>`
+        : `<div class="watermark-text">KhataFlow<div class="watermark-tagline">Smart dukan · Smart hisaab</div></div>`;
+
+      const html = `<!DOCTYPE html>
 <html>
-<head><meta charset="utf-8"><style>
-body{font-family:sans-serif;padding:40px;color:#333}
-h1{color:#006b59;font-size:24px;margin:0}
-.date{color:#666;margin:4px 0 20px}
-.summary{display:flex;gap:20px;margin-bottom:20px}
-.card{background:#f4f6f8;padding:16px;border-radius:8px;flex:1}
-.card h3{margin:0 0 4px;font-size:12px;color:#666;text-transform:uppercase}
-.card .val{font-size:22px;font-weight:700;color:#006b59}
-table{width:100%;border-collapse:collapse;margin-top:16px}
-th{text-align:left;padding:8px 4px;border-bottom:2px solid #006b59;color:#006b59;font-size:12px;text-transform:uppercase}
-td{padding:8px 4px;border-bottom:1px solid #e0e0e0}
-</style></head>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Inter','Helvetica Neue',Arial,sans-serif;background:#f0f2f5;padding:24px}
+.page{max-width:750px;margin:0 auto;background:#ffffff;border-radius:20px;overflow:hidden;box-shadow:0 12px 48px rgba(15,46,42,0.1);position:relative}
+.watermark{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);opacity:0.1;pointer-events:none;z-index:0;text-align:center}
+.watermark img{max-width:260px;max-height:260px}
+.watermark .watermark-tagline{font-size:15px;font-weight:700;color:#0f2e2a;letter-spacing:1.5px;margin-top:8px;opacity:0.9}
+.watermark-text{position:absolute;top:45%;left:50%;transform:translate(-50%,-50%) rotate(-30deg);font-size:76px;font-weight:900;color:#0f2e2a;opacity:0.035;pointer-events:none;z-index:0;white-space:nowrap;letter-spacing:10px;text-align:center}
+.watermark-text .watermark-tagline{font-size:20px;font-weight:700;letter-spacing:3px;margin-top:8px;opacity:0.9}
+.header{background:linear-gradient(135deg,#0f2e2a 0%,#1a6b5e 100%);padding:32px 40px;color:#fff;position:relative;z-index:1}
+.header-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px}
+.header h1{font-size:28px;font-weight:800;letter-spacing:-0.5px;margin-bottom:4px;line-height:1.2}
+.header .sub{font-size:14px;opacity:0.85;font-weight:500;letter-spacing:0.3px}
+.header .address{font-size:11px;opacity:0.6;font-weight:400;margin-top:4px;line-height:1.5;max-width:360px}
+.header .date-row{display:flex;justify-content:space-between;align-items:center;padding-top:14px;border-top:1px solid rgba(255,255,255,0.1)}
+.header .date-row span{font-size:12px;opacity:0.8;letter-spacing:0.2px}
+.badge{display:inline-block;background:rgba(255,255,255,0.12);border-radius:20px;padding:6px 18px;font-size:11px;font-weight:600;letter-spacing:0.5px;text-transform:uppercase}
+.content{position:relative;z-index:1;padding:0}
+.summary{display:grid;grid-template-columns:1fr 1fr 1fr;gap:0;margin:0;background:transparent}
+.summary-item{padding:28px 32px;text-align:center;border-right:1px solid #f0f0f0;background:transparent}
+.summary-item:last-child{border-right:none}
+.summary-item h4{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#9ca3af;margin-bottom:6px}
+.summary-item .value{font-size:30px;font-weight:800;color:#0f2e2a;letter-spacing:-0.5px}
+.summary-item .value.credit{color:#d97706}
+.section{padding:28px 32px}
+.section-title{font-size:13px;font-weight:700;color:#0f2e2a;margin-bottom:20px;padding-bottom:12px;border-bottom:2px solid #e5e7eb;letter-spacing:0.8px;text-transform:uppercase}
+table{width:100%;border-collapse:separate;border-spacing:0}
+thead th{padding:12px 14px;border-bottom:2px solid #e5e7eb;color:#6b7280;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;background:#f9fafb}
+thead th:first-child{border-radius:10px 0 0 0}
+thead th:last-child{border-radius:0 10px 0 0}
+tbody td{padding:12px 14px;border-bottom:1px solid #f3f4f6;color:#374151;font-size:13px}
+tbody tr:last-child td{border-bottom:none}
+.pay-list{display:grid;gap:8px}
+.pay-item{display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-radius:12px;background:#f9fafb;border:1px solid #f3f4f6}
+.pay-item .left{display:flex;align-items:center;gap:14px}
+.pay-dot{width:12px;height:12px;border-radius:50%}
+.pay-item .name{font-size:14px;font-weight:600;color:#1f2937}
+.pay-item .amt{font-size:18px;font-weight:700;color:#111827}
+.footer{text-align:center;padding:24px 32px;border-top:1px solid #f0f0f0;font-size:11px;color:#9ca3af;letter-spacing:0.5px;position:relative;z-index:1;background:#fafafa}
+</style>
+</head>
 <body>
-<h1>${period === 'daily' ? 'Daily' : 'Monthly'} Sales Report</h1>
-<p class="date">${now}</p>
-<div class="summary">
-<div class="card"><h3>Total Sales</h3><div class="val">₹${Number(totalSales).toLocaleString('en-IN')}</div></div>
-<div class="card"><h3>Total Bills</h3><div class="val">${totalBills}</div></div>
-<div class="card"><h3>Avg Value</h3><div class="val">₹${Number(avgBillValue).toFixed(0)}</div></div>
+<div class="page">
+  ${watermarkHtml}
+  <div class="header">
+    <div class="header-top">
+      <div>
+        <h1>${label} Sales Report</h1>
+        <div class="sub">${shopName || 'KhataFlow'}</div>
+        ${shopAddress ? `<div class="address">${shopAddress}</div>` : ''}
+      </div>
+      ${logoHtml}
+    </div>
+    <div class="date-row">
+      <span>${today}</span>
+      <span class="badge">${period === 'daily' ? 'Day Summary' : 'Month Summary'}</span>
+    </div>
+  </div>
+  <div class="content">
+  <div class="summary">
+    <div class="summary-item">
+      <h4>Total Sales</h4>
+      <div class="value">₹${Number(totalSales).toLocaleString('en-IN')}</div>
+    </div>
+    <div class="summary-item">
+      <h4>Total Bills</h4>
+      <div class="value">${totalBills}</div>
+    </div>
+    <div class="summary-item">
+      <h4>Total Credit</h4>
+      <div class="value credit">₹${Number(totalCredit).toLocaleString('en-IN')}</div>
+    </div>
+  </div>
+  <div class="section">
+    <div class="section-title">Payment Breakdown</div>
+    <div class="pay-list">
+      ${(['cash', 'upi', 'card', 'credit'] as const).filter(m => Number((paymentBreakdown as any)?.[m] || 0) > 0).map(m => {
+        const amount = Number((paymentBreakdown as any)?.[m] || 0);
+        const colors: Record<string, string> = { cash: '#2e7d32', upi: '#1565c0', card: '#7c3aed', credit: '#d97706' };
+        return `<div class="pay-item">
+          <div class="left"><span class="pay-dot" style="background:${colors[m]}"></span><span class="name">${m.charAt(0).toUpperCase() + m.slice(1)}</span></div>
+          <span class="amt">₹${amount.toLocaleString('en-IN')}</span>
+        </div>`;
+      }).join('')}
+    </div>
+  </div>
+  <div class="section" style="padding-top:0">
+    <div class="section-title">Top Products</div>
+    <table><thead><tr><th style="text-align:center">#</th><th>Product</th><th style="text-align:center">Qty Sold</th><th style="text-align:right">Revenue</th></tr></thead><tbody>${topRows}</tbody></table>
+  </div>
+  </div>
+  <div class="footer">
+    Powered by KhataFlow
+  </div>
 </div>
-<h2>Top Products</h2>
-<table><thead><tr><th>#</th><th>Product</th><th>Qty</th><th>Revenue</th></tr></thead><tbody>${rows}</tbody></table>
-</body></html>`;
+</body>
+</html>`;
 
       const { uri } = await Print.printToFileAsync({ html });
       const canShare = await Sharing.isAvailableAsync();
       if (canShare) {
-        await Sharing.shareAsync(uri, { mimeType: 'application/pdf' });
+        Sharing.shareAsync(uri, { mimeType: 'application/pdf' });
       }
     } catch {
       // silently fail
     } finally {
       setExporting(false);
+      exportingRef.current = false;
     }
   };
 
@@ -196,10 +317,6 @@ td{padding:8px 4px;border-bottom:1px solid #e0e0e0}
               <Ionicons name="receipt-outline" size={14} color={Tokens['on-secondary']} />
               <Text style={styles.salesBadgeText}>{totalBills} bills</Text>
             </View>
-            <View style={styles.salesBadge}>
-              <Ionicons name="trending-up-outline" size={14} color={Tokens['on-secondary']} />
-              <Text style={styles.salesBadgeText}>Avg ₹{Number(avgBillValue).toFixed(0)}{label}</Text>
-            </View>
           </View>
         </View>
 
@@ -220,11 +337,11 @@ td{padding:8px 4px;border-bottom:1px solid #e0e0e0}
             <Text style={styles.statLabel}>Revenue</Text>
           </View>
           <View style={styles.statCard}>
-            <View style={[styles.statIcon, { backgroundColor: '#f3e8ff' }]}>
-              <Ionicons name="analytics-outline" size={20} color="#7c3aed" />
+            <View style={[styles.statIcon, { backgroundColor: '#fef3c7' }]}>
+              <Ionicons name="wallet-outline" size={20} color="#d97706" />
             </View>
-            <Text style={styles.statValue}>₹{Number(avgBillValue).toFixed(0)}</Text>
-            <Text style={styles.statLabel}>{period === 'daily' ? 'Avg/Bill' : 'Avg/Day'}</Text>
+            <Text style={styles.statValue}>₹{Number(totalCredit).toLocaleString('en-IN')}</Text>
+            <Text style={styles.statLabel}>Credit</Text>
           </View>
         </View>
 

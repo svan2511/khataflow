@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet, TextInput, Platform, KeyboardAvoidingView, RefreshControl } from 'react-native';
+import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -35,6 +36,9 @@ export default function BillHistoryScreen() {
   const [bills, setBills] = useState<BillListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [customDateFrom, setCustomDateFrom] = useState<Date | null>(null);
+  const [customDateTo, setCustomDateTo] = useState<Date | null>(null);
+  const [showDatePicker, setShowDatePicker] = useState<'from' | 'to' | null>(null);
   const { token } = useAuth();
 
   const fetchBills = useCallback(async (search?: string) => {
@@ -42,8 +46,13 @@ export default function BillHistoryScreen() {
     try {
       const params: Record<string, string> = {};
       const dateRange = getDateRange(activeFilter);
-      if (dateRange.date_from) params.date_from = dateRange.date_from;
-      if (dateRange.date_to) params.date_to = dateRange.date_to;
+      if (activeFilter === 'Custom') {
+        if (customDateFrom) params.date_from = customDateFrom.toISOString().split('T')[0];
+        if (customDateTo) params.date_to = customDateTo.toISOString().split('T')[0];
+      } else {
+        if (dateRange.date_from) params.date_from = dateRange.date_from;
+        if (dateRange.date_to) params.date_to = dateRange.date_to;
+      }
       if (search?.trim()) params.search = search.trim();
 
       const res = await api.listBills(token, { ...params, per_page: 50 });
@@ -54,7 +63,7 @@ export default function BillHistoryScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [token, activeFilter]);
+  }, [token, activeFilter, customDateFrom, customDateTo]);
 
   useEffect(() => {
     setLoading(true);
@@ -69,6 +78,24 @@ export default function BillHistoryScreen() {
   const handleRefresh = () => {
     setRefreshing(true);
     fetchBills(searchQuery);
+  };
+
+  const handleDateChange = (event: DateTimePickerEvent, selectedDate?: Date) => {
+    if (event.type === 'dismissed') {
+      setShowDatePicker(null);
+      return;
+    }
+    if (showDatePicker === 'from') {
+      setCustomDateFrom(selectedDate || customDateFrom);
+    } else if (showDatePicker === 'to') {
+      setCustomDateTo(selectedDate || customDateTo);
+    }
+    if (Platform.OS === 'android') setShowDatePicker(null);
+  };
+
+  const formatDate = (d: Date | null) => {
+    if (!d) return '';
+    return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
   };
 
   const filtered = bills;
@@ -86,6 +113,12 @@ export default function BillHistoryScreen() {
 
   const weekTotal = bills.reduce((s, b) => s + b.total, 0);
 
+  const periodLabel = activeFilter === 'Custom'
+    ? (customDateFrom && customDateTo
+        ? `${formatDate(customDateFrom)} to ${formatDate(customDateTo)}`
+        : 'Custom')
+    : activeFilter;
+
   const getStatusText = (status: string) => {
     switch (status) {
       case 'paid': return 'Paid';
@@ -102,14 +135,6 @@ export default function BillHistoryScreen() {
       case 'pending': return styles.statusPending;
       default: return styles.statusPaid;
     }
-  };
-
-  const formatPaymentMethod = (method: string): string => {
-    const map: Record<string, string> = {
-      cash: 'Cash', upi: 'UPI', card: 'Card',
-      credit: 'Credit', mix: 'Split',
-    };
-    return map[method] || method;
   };
 
   return (
@@ -150,6 +175,32 @@ export default function BillHistoryScreen() {
         </ScrollView>
       </View>
 
+      {activeFilter === 'Custom' && (
+        <View style={styles.customDateRow}>
+          <TouchableOpacity style={styles.datePickBtn} onPress={() => setShowDatePicker('from')}>
+            <Text style={styles.dateLabel}>From</Text>
+            <Text style={[styles.dateValue, !customDateFrom && styles.datePlaceholder]}>
+              {customDateFrom ? formatDate(customDateFrom) : 'Select date'}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.datePickBtn} onPress={() => setShowDatePicker('to')}>
+            <Text style={styles.dateLabel}>To</Text>
+            <Text style={[styles.dateValue, !customDateTo && styles.datePlaceholder]}>
+              {customDateTo ? formatDate(customDateTo) : 'Select date'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
+      {showDatePicker && (
+        <DateTimePicker
+          value={showDatePicker === 'from' ? (customDateFrom || new Date()) : (customDateTo || new Date())}
+          mode="date"
+          display={Platform.OS === 'ios' ? 'inline' : 'default'}
+          onChange={handleDateChange}
+          maximumDate={new Date()}
+        />
+      )}
+
       <View style={styles.statsRow}>
         <View style={styles.statCard}>
           <Text style={styles.statValue}>₹{todayTotal}</Text>
@@ -157,7 +208,7 @@ export default function BillHistoryScreen() {
         </View>
         <View style={styles.statCard}>
           <Text style={styles.statValue}>₹{weekTotal}</Text>
-          <Text style={styles.statLabel}>{activeFilter === 'Today' ? 'Today' : activeFilter === 'This Week' ? 'This Week' : 'Period'}</Text>
+          <Text style={styles.statLabel}>{periodLabel}</Text>
         </View>
         <View style={styles.statCard}>
           <Text style={styles.statValue}>{bills.length}</Text>
@@ -193,19 +244,24 @@ export default function BillHistoryScreen() {
                     onPress={() => (router as any).push(`/bill/detail?uuid=${bill.id}`)}
                     activeOpacity={0.7}
                   >
-                    <View style={styles.billCardLeft}>
-                      <View style={styles.billIcon}>
-                        <Ionicons name="receipt" size={22} color={Tokens.secondary} />
+                    <View style={styles.billAccent} />
+                    <View style={styles.billCardBody}>
+                      <View style={styles.billTop}>
+                        <View style={styles.billTopLeft}>
+                          <Text style={styles.billNo}>{bill.bill_number}</Text>
+                          <Text style={styles.billCustomer}>{bill.customer_name || 'Walk-in Customer'}</Text>
+                        </View>
+                        <View style={styles.billTopRight}>
+                          <Text style={styles.billAmount}>₹{bill.total}</Text>
+                          <View style={[styles.billStatusBadge, getStatusStyle(bill.payment_status)]}>
+                            <Text style={styles.billStatusText}>{getStatusText(bill.payment_status)}</Text>
+                          </View>
+                        </View>
                       </View>
-                      <View style={{ flex: 1, minWidth: 0 }}>
-                        <Text style={styles.billNo}>{bill.bill_number}</Text>
-                        <Text style={styles.billCustomer}>{bill.customer_name || 'Walk-in Customer'}</Text>
-                      </View>
-                    </View>
-                    <View style={styles.billCardRight}>
-                      <Text style={styles.billAmount}>₹{bill.total}</Text>
-                      <View style={[styles.statusBadge, getStatusStyle(bill.payment_status)]}>
-                        <Text style={styles.statusText}>{getStatusText(bill.payment_status)}</Text>
+                      <View style={styles.billBottom}>
+                        <Text style={styles.billDate}>
+                          {new Date(bill.created_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+                        </Text>
                       </View>
                     </View>
                   </TouchableOpacity>
@@ -244,6 +300,18 @@ const styles = StyleSheet.create({
   filterChipActive: { backgroundColor: Tokens['primary-container'], borderColor: Tokens['primary-container'] },
   filterText: { fontSize: Typography['label-md'].fontSize, fontWeight: Typography['label-md'].fontWeight as any, color: Tokens['on-surface-variant'] },
   filterTextActive: { color: Tokens['on-primary'] },
+  customDateRow: {
+    flexDirection: 'row', gap: 10, paddingHorizontal: Spacing.gutter,
+    paddingBottom: Spacing.sm,
+  },
+  datePickBtn: {
+    flex: 1, backgroundColor: Tokens['surface-container-lowest'],
+    borderRadius: BorderRadius.lg, padding: 12,
+    borderWidth: 1, borderColor: Tokens['outline-variant'],
+  },
+  dateLabel: { fontSize: Typography['label-md'].fontSize, color: Tokens['on-surface-variant'], marginBottom: 2 },
+  dateValue: { fontSize: Typography['body-md'].fontSize, color: Tokens['on-surface'], fontWeight: '500' },
+  datePlaceholder: { color: Tokens['on-surface-variant'], fontWeight: '400' },
   statsRow: { flexDirection: 'row', gap: Spacing.sm, paddingHorizontal: Spacing.gutter, marginBottom: Spacing.md },
   statCard: {
     flex: 1, backgroundColor: Tokens['surface-container-lowest'], borderRadius: BorderRadius.xl,
@@ -260,23 +328,24 @@ const styles = StyleSheet.create({
   section: {},
   sectionTitle: { fontSize: Typography['headline-sm'].fontSize, fontWeight: Typography['headline-sm'].fontWeight as any, color: Tokens['on-surface'], marginBottom: Spacing.sm },
   billCard: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    backgroundColor: Tokens['surface-container-lowest'], borderRadius: BorderRadius.xl,
-    padding: Spacing.md, marginBottom: Spacing.sm, shadowColor: Tokens['surface-tint'],
-    shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.12, shadowRadius: 20, elevation: 3,
+    flexDirection: 'row', backgroundColor: '#fff', borderRadius: 14,
+    marginBottom: 10, overflow: 'hidden',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 4, elevation: 1,
   },
-  billCardLeft: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, flex: 1 },
-  billIcon: {
-    width: 40, height: 40, borderRadius: BorderRadius.lg,
-    backgroundColor: Tokens['secondary-fixed'], alignItems: 'center', justifyContent: 'center',
-  },
-  billNo: { fontSize: Typography['label-lg'].fontSize, fontWeight: Typography['label-lg'].fontWeight as any, color: Tokens['on-surface'] },
-  billCustomer: { fontSize: Typography['body-md'].fontSize, color: Tokens['on-surface-variant'] },
-  billCardRight: { alignItems: 'flex-end' },
-  billAmount: { fontSize: Typography['headline-sm'].fontSize, fontWeight: '700', color: Tokens['on-surface'] },
-  statusBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: BorderRadius.full, marginTop: 4 },
-  statusPaid: { backgroundColor: Tokens['secondary-fixed'] },
-  statusPartial: { backgroundColor: Tokens['tertiary-fixed'] },
-  statusPending: { backgroundColor: Tokens['error-container'] },
-  statusText: { fontSize: Typography['label-md'].fontSize, fontWeight: Typography['label-md'].fontWeight as any, color: Tokens['on-secondary-fixed'] },
+  billAccent: { width: 4, backgroundColor: '#006b59' },
+  billCardBody: { flex: 1, padding: 14, gap: 10 },
+  billTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
+  billTopLeft: { flex: 1, minWidth: 0, marginRight: 12 },
+  billNo: { fontSize: 16, fontWeight: '700', color: '#1c1c1e', fontFamily: 'Lexend-SemiBold' },
+  billCustomer: { fontSize: 13, color: '#6b7280', marginTop: 2 },
+  billTopRight: { alignItems: 'flex-end' },
+  billAmount: { fontSize: 18, fontWeight: '800', color: '#1c1c1e', letterSpacing: -0.3 },
+  billStatusBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, marginTop: 4 },
+  billStatusText: { fontSize: 11, fontWeight: '700' },
+  billBottom: { flexDirection: 'row', alignItems: 'center' },
+  billDate: { fontSize: 12, color: '#9ca3af' },
+  statusPaid: { backgroundColor: '#d1fae5' },
+  statusPartial: { backgroundColor: '#fef3c7' },
+  statusPending: { backgroundColor: '#fee2e2' },
+  statusText: { color: '#1c1c1e' },
 });

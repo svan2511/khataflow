@@ -202,6 +202,7 @@ export interface DailyReport {
   average_bill_value: number;
   total_paid: number;
   total_due: number;
+  total_credit: number;
   payment_breakdown: {
     cash: number;
     upi: number;
@@ -223,6 +224,7 @@ export interface MonthlyReport {
     total_sales: number;
     total_bills: number;
     average_per_day: number;
+    total_credit: number;
     payment_breakdown: {
       cash: number; upi: number; card: number; mix: number; credit: number;
     };

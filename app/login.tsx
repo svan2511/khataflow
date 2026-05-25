@@ -12,7 +12,7 @@ const OTP_TIMER = 30;
 
 export default function LoginScreen() {
   const [mobile, setMobile] = useState('');
-  const [otp, setOtp] = useState(['', '', '', '', '', '']);
+  const [otp, setOtp] = useState(['', '', '', '']);
   const [step, setStep] = useState<'phone' | 'otp'>('phone');
   const [loading, setLoading] = useState(false);
   const [otpLoading, setOtpLoading] = useState(false);
@@ -84,7 +84,7 @@ export default function LoginScreen() {
     newOtp[index] = text;
     setOtp(newOtp);
 
-    if (text && index < 5) {
+    if (text && index < 3) {
       otpRefs.current[index + 1]?.focus();
     }
   };
@@ -97,7 +97,7 @@ export default function LoginScreen() {
 
   const handleVerifyOtp = async () => {
     const otpString = otp.join('');
-    if (otpString.length !== 6) return;
+    if (otpString.length !== 4) return;
 
     setOtpLoading(true);
     try {
@@ -105,7 +105,7 @@ export default function LoginScreen() {
       router.replace(signedInUser.has_shop ? '/(tabs)' : '/shop-setup');
     } catch (err: any) {
       showToast({ type: 'error', title: 'OTP verification failed', message: err.message });
-      setOtp(['', '', '', '', '', '']);
+      setOtp(['', '', '', '']);
       otpRefs.current[0]?.focus();
     } finally {
       setOtpLoading(false);
@@ -114,7 +114,7 @@ export default function LoginScreen() {
 
   const handleBack = () => {
     setStep('phone');
-    setOtp(['', '', '', '', '', '']);
+    setOtp(['', '', '', '']);
   };
 
   if (step === 'otp') {
@@ -133,7 +133,7 @@ export default function LoginScreen() {
             </View>
             <Text style={styles.title}>Verify OTP</Text>
             <Text style={styles.description}>
-              Enter the 6-digit code sent to{' '}
+               Enter the 4-digit code sent to{' '}
               <Text style={styles.phoneHighlight}>+91 {mobile}</Text>
             </Text>
           </View>
@@ -159,10 +159,10 @@ export default function LoginScreen() {
               style={[
                 styles.button,
                 styles.verifyButton,
-                otp.join('').length !== 6 && styles.buttonDisabled,
+                otp.join('').length !== 4 && styles.buttonDisabled,
               ]}
               onPress={handleVerifyOtp}
-              disabled={otpLoading || otp.join('').length !== 6}
+              disabled={otpLoading || otp.join('').length !== 4}
               activeOpacity={0.9}
             >
               {otpLoading ? (
@@ -416,12 +416,12 @@ const styles = StyleSheet.create({
   },
   otpContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: Spacing.sm,
+    justifyContent: 'center',
+    gap: 10,
   },
   otpInput: {
-    width: 48,
-    height: 56,
+    width: 60,
+    height: 60,
     borderWidth: 1.5,
     borderColor: Tokens['outline-variant'],
     borderRadius: BorderRadius.lg,
