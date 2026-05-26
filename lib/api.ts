@@ -1,6 +1,6 @@
-import Constants from 'expo-constants';
+//const API_BASE = 'http://192.168.1.9:8000/api';
 
-const API_BASE = Constants.expoConfig?.extra?.apiUrl ?? 'http://192.168.1.9:8000/api';
+const API_BASE = 'https://khata-flow-api.onrender.com/api';
 
 export interface ApiResponse<T = any> {
   success: boolean;
@@ -200,31 +200,6 @@ export interface DailyReport {
   total_sales: number;
   total_bills: number;
   average_bill_value: number;
-  total_paid: number;
-  total_due: number;
-  total_credit: number;
-  payment_breakdown: {
-    cash: number;
-    upi: number;
-    card: number;
-    mix: number;
-    credit: number;
-  };
-  top_products: Array<{
-    product_name: string;
-    total_quantity: number;
-    total_revenue: number;
-    unit: string;
-  }>;
-}
-
-export interface CustomRangeReport {
-  start_date: string;
-  end_date: string;
-  total_sales: number;
-  total_bills: number;
-  average_bill_value: number;
-  average_per_day: number;
   total_paid: number;
   total_due: number;
   total_credit: number;
@@ -563,11 +538,6 @@ export const api = {
   getDailyReport(token: string, date?: string) {
     const query = date ? '?date=' + date : '';
     return request<DailyReport>('/reports/daily' + query, {}, token);
-  },
-
-  getCustomRangeReport(token: string, startDate: string, endDate: string) {
-    const params = new URLSearchParams({ start_date: startDate, end_date: endDate });
-    return request<CustomRangeReport>('/reports/custom-range?' + params.toString(), {}, token);
   },
 
   getMonthlyReport(token: string, year?: number, month?: number) {
