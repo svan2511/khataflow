@@ -22,6 +22,7 @@ export default function AddEditProductScreen() {
   const [purchasePrice, setPurchasePrice] = useState('');
   const [unit, setUnit] = useState('pc');
   const [openingStock, setOpeningStock] = useState('');
+  const [lowStockThreshold, setLowStockThreshold] = useState('');
   const [image, setImage] = useState<string | null>(null);
   const [imageFile, setImageFile] = useState<any>(null);
 
@@ -42,6 +43,7 @@ export default function AddEditProductScreen() {
       setPurchasePrice(p.cost_price ? String(p.cost_price) : '');
       setUnit(p.unit);
       setOpeningStock(p.stock_quantity ? String(p.stock_quantity) : '');
+      setLowStockThreshold(p.low_stock_threshold ? String(p.low_stock_threshold) : '');
       if (p.image) setImage(p.image);
     } catch (e: any) {
       Alert.alert('Error', 'Failed to load product');
@@ -88,6 +90,7 @@ export default function AddEditProductScreen() {
       if (category.trim()) formData.append('category_name', category.trim());
       if (purchasePrice) formData.append('cost_price', purchasePrice);
       if (openingStock) formData.append('stock_quantity', openingStock);
+      if (lowStockThreshold) formData.append('low_stock_threshold', lowStockThreshold);
 
       if (imageFile) {
         const filename = imageFile.fileName || 'product.jpg';
@@ -227,7 +230,7 @@ export default function AddEditProductScreen() {
                 </ScrollView>
               </View>
               <View style={styles.halfField}>
-                <Text style={styles.label}>Opening Stock</Text>
+                <Text style={styles.label}>Total Stock</Text>
                 <TextInput
                   style={styles.input}
                   placeholder="0"
@@ -237,6 +240,18 @@ export default function AddEditProductScreen() {
                   onChangeText={setOpeningStock}
                 />
               </View>
+            </View>
+
+            <View style={styles.fieldGroup}>
+              <Text style={styles.label}>Low Stock Alert At</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="e.g. 5"
+                placeholderTextColor={Tokens.outline}
+                keyboardType="numeric"
+                value={lowStockThreshold}
+                onChangeText={setLowStockThreshold}
+              />
             </View>
           </View>
         </ScrollView>

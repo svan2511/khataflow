@@ -26,6 +26,7 @@ export default function ProductSelectScreen() {
   const [quickUnit, setQuickUnit] = useState('pc');
   const [quickCategory, setQuickCategory] = useState('');
   const [quickStock, setQuickStock] = useState('');
+  const [quickLowStock, setQuickLowStock] = useState('');
   const [quickSaving, setQuickSaving] = useState(false);
   const quickUnits = ['pc', 'kg', 'g', 'l', 'ml', 'dozen', 'box', 'packet'];
 
@@ -129,7 +130,7 @@ export default function ProductSelectScreen() {
     }
   };
 
-  const isIntegerUnit = (unit?: string) => unit && ['pc', 'dozen', 'box', 'packet'].includes(unit);
+  const isIntegerUnit = (unit?: string) => unit && ['pc', 'box', 'packet'].includes(unit);
 const displayUnit = (unit?: string) => unit || 'pcs';
 
   const handleQuickAdd = async () => {
@@ -143,6 +144,7 @@ const displayUnit = (unit?: string) => unit || 'pcs';
       if (quickCategory.trim()) formData.append('category_name', quickCategory.trim());
       if (quickCostPrice) formData.append('cost_price', quickCostPrice);
       if (quickStock) formData.append('stock_quantity', quickStock);
+      if (quickLowStock) formData.append('low_stock_threshold', quickLowStock);
       const res = await api.createProductFull(token, formData);
       const product = res.data;
       addItem({
@@ -159,6 +161,7 @@ const displayUnit = (unit?: string) => unit || 'pcs';
       setQuickUnit('pc');
       setQuickCategory('');
       setQuickStock('');
+      setQuickLowStock('');
       setShowQuickAdd(false);
       fetchProducts(search);
     } catch (e: any) {
@@ -365,7 +368,7 @@ const displayUnit = (unit?: string) => unit || 'pcs';
                   </ScrollView>
                 </View>
                 <View style={{ width: 100 }}>
-                  <Text style={styles.qaLabel}>Opening Stock</Text>
+                  <Text style={styles.qaLabel}>Total Stock</Text>
                   <TextInput
                     style={styles.quickAddInput}
                     placeholder="0"
@@ -377,8 +380,18 @@ const displayUnit = (unit?: string) => unit || 'pcs';
                 </View>
               </View>
 
+              <Text style={styles.qaLabel}>Low Stock Alert At</Text>
+              <TextInput
+                style={styles.quickAddInput}
+                placeholder="e.g. 5"
+                placeholderTextColor="#9ca3af"
+                value={quickLowStock}
+                onChangeText={setQuickLowStock}
+                keyboardType="numeric"
+              />
+
               <View style={styles.quickAddActions}>
-                <TouchableOpacity style={styles.quickAddCancel} onPress={() => { setShowQuickAdd(false); setQuickName(''); setQuickPrice(''); setQuickCostPrice(''); setQuickUnit('pc'); setQuickCategory(''); setQuickStock(''); }}>
+                <TouchableOpacity style={styles.quickAddCancel} onPress={() => { setShowQuickAdd(false); setQuickName(''); setQuickPrice(''); setQuickCostPrice(''); setQuickUnit('pc'); setQuickCategory(''); setQuickStock(''); setQuickLowStock(''); }}>
                   <Text style={styles.quickAddCancelText}>Cancel</Text>
                 </TouchableOpacity>
                 <TouchableOpacity

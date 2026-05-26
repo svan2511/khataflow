@@ -85,15 +85,14 @@ export default function EditProfileScreen() {
 
     setSaving(true);
     try {
-      const payload: Record<string, any> = {
-        shop_name: shopName,
-        owner_name: ownerName,
-        address,
-        city,
-        state,
-        pincode,
-        gstin,
-      };
+      const payload: Record<string, any> = {};
+      if (shopName) payload.shop_name = shopName;
+      if (ownerName) payload.owner_name = ownerName;
+      if (address) payload.address = address;
+      if (city) payload.city = city;
+      if (state) payload.state = state;
+      if (pincode) payload.pincode = pincode;
+      if (gstin) payload.gstin = gstin;
 
       let response;
       if (logoChanged && logo) {

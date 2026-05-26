@@ -82,14 +82,20 @@ export default function BillDetailScreen() {
   const handleShare = async () => {
     if (!bill) return;
     setSharing(true);
+    const timeout = new Promise<void>((_, reject) => setTimeout(() => reject(new Error('timeout')), 15000));
     try {
-      if (bill.customer?.phone) {
-        await shareOnWhatsApp(bill, shopName, shopLogoBase64 || undefined, shopAddress || undefined);
-      } else {
-        await shareInvoicePdf(bill, shopName, shopLogoBase64 || undefined, shopAddress || undefined);
-      }
+      await Promise.race([
+        (bill.customer?.phone
+          ? shareOnWhatsApp(bill, shopName, shopLogoBase64 || undefined, shopAddress || undefined)
+          : shareInvoicePdf(bill, shopName, shopLogoBase64 || undefined, shopAddress || undefined)
+        ),
+        timeout,
+      ]);
     } catch {
-      await shareInvoicePdf(bill, shopName, shopLogoBase64 || undefined, shopAddress || undefined).catch(() => {});
+      await Promise.race([
+        shareInvoicePdf(bill, shopName, shopLogoBase64 || undefined, shopAddress || undefined).catch(() => {}),
+        timeout,
+      ]).catch(() => {});
     } finally {
       setSharing(false);
     }

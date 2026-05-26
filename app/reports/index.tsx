@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { View, Text, Image, TouchableOpacity, ScrollView, StyleSheet, ActivityIndicator, RefreshControl } from 'react-native';
+import { View, Text, Image, TouchableOpacity, ScrollView, StyleSheet, ActivityIndicator, RefreshControl, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
+import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system';
@@ -9,15 +10,23 @@ import { File, Directory, Paths } from 'expo-file-system';
 import { Ionicons } from '@expo/vector-icons';
 import { Tokens, Spacing } from '@/constants/theme';
 import { useAuth } from '@/lib/auth-context';
-import { api, DailyReport, MonthlyReport } from '@/lib/api';
+import { api, DailyReport, MonthlyReport, CustomRangeReport } from '@/lib/api';
 
 const displayUnit = (unit?: string) => unit || 'pcs';
 
 export default function ReportsScreen() {
   const { token } = useAuth();
-  const [period, setPeriod] = useState<'daily' | 'monthly'>('daily');
+  const [period, setPeriod] = useState<'daily' | 'monthly' | 'custom'>('daily');
   const [dailyReport, setDailyReport] = useState<DailyReport | null>(null);
   const [monthlyReport, setMonthlyReport] = useState<MonthlyReport | null>(null);
+  const [customReport, setCustomReport] = useState<CustomRangeReport | null>(null);
+  const [showStartPicker, setShowStartPicker] = useState(false);
+  const [showEndPicker, setShowEndPicker] = useState(false);
+  const customStartRef = useRef(new Date());
+  const customEndRef = useRef(new Date());
+  const [customStartDisplay, setCustomStartDisplay] = useState(new Date());
+  const [customEndDisplay, setCustomEndDisplay] = useState(new Date());
+  const [customFetchKey, setCustomFetchKey] = useState(0);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -35,20 +44,25 @@ export default function ReportsScreen() {
       if (period === 'daily') {
         const res = await api.getDailyReport(token);
         setDailyReport(res.data);
-      } else {
+      } else if (period === 'monthly') {
         const now = new Date();
         const res = await api.getMonthlyReport(token, now.getFullYear(), now.getMonth() + 1);
         setMonthlyReport(res.data);
+      } else {
+        const fmt = (d: Date) => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+        const res = await api.getCustomRangeReport(token, fmt(customStartRef.current), fmt(customEndRef.current));
+        setCustomReport(res.data);
       }
     } catch (e: any) {
       console.error('Failed to fetch report', e.message);
       if (period === 'monthly') setMonthlyReport(null);
+      else if (period === 'custom') setCustomReport(null);
       else setDailyReport(null);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [token, period]);
+  }, [token, period, customFetchKey]);
 
   useEffect(() => {
     fetchReport(true);
@@ -83,25 +97,35 @@ export default function ReportsScreen() {
 
   const totalSales = period === 'daily'
     ? dailyReport?.total_sales ?? 0
-    : monthlyReport?.current_month.total_sales ?? 0;
+    : period === 'monthly'
+    ? monthlyReport?.current_month.total_sales ?? 0
+    : customReport?.total_sales ?? 0;
 
   const totalBills = period === 'daily'
     ? dailyReport?.total_bills ?? 0
-    : monthlyReport?.current_month.total_bills ?? 0;
+    : period === 'monthly'
+    ? monthlyReport?.current_month.total_bills ?? 0
+    : customReport?.total_bills ?? 0;
 
   const totalCredit = period === 'daily'
     ? dailyReport?.total_credit ?? 0
-    : monthlyReport?.current_month.total_credit ?? 0;
+    : period === 'monthly'
+    ? monthlyReport?.current_month.total_credit ?? 0
+    : customReport?.total_credit ?? 0;
 
   const paymentBreakdown = period === 'daily'
     ? dailyReport?.payment_breakdown
-    : monthlyReport?.current_month.payment_breakdown;
+    : period === 'monthly'
+    ? monthlyReport?.current_month.payment_breakdown
+    : customReport?.payment_breakdown;
 
   const topProducts = period === 'daily'
     ? dailyReport?.top_products ?? []
-    : monthlyReport?.current_month.top_products ?? [];
+    : period === 'monthly'
+    ? monthlyReport?.current_month.top_products ?? []
+    : customReport?.top_products ?? [];
 
-  const growth = monthlyReport?.comparison.sales_growth_percentage;
+  const growth = period === 'monthly' ? monthlyReport?.comparison.sales_growth_percentage : undefined;
 
   const handleExportPDF = async () => {
     if (exportingRef.current) return;
@@ -109,7 +133,12 @@ export default function ReportsScreen() {
     setExporting(true);
     try {
       const now = new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' });
-      const label = period === 'daily' ? 'Daily' : 'Monthly';
+      const monthName = monthlyReport?.current_month.month
+        ? (() => { const [y, m] = monthlyReport.current_month.month.split('-'); return new Date(parseInt(y), parseInt(m) - 1).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' }); })()
+        : '';
+      const label = period === 'daily' ? 'Daily'
+        : period === 'monthly' ? monthName
+        : 'Custom Range';
       const today = new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
       const topRows = topProducts.length > 0 ? topProducts.map((p, i) =>
@@ -138,8 +167,8 @@ body{font-family:'Inter','Helvetica Neue',Arial,sans-serif;background:#f0f2f5;pa
 .watermark{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);opacity:0.1;pointer-events:none;z-index:0;text-align:center}
 .watermark img{max-width:260px;max-height:260px}
 .watermark .watermark-tagline{font-size:15px;font-weight:700;color:#0f2e2a;letter-spacing:1.5px;margin-top:8px;opacity:0.9}
-.watermark-text{position:absolute;top:45%;left:50%;transform:translate(-50%,-50%) rotate(-30deg);font-size:76px;font-weight:900;color:#0f2e2a;opacity:0.035;pointer-events:none;z-index:0;white-space:nowrap;letter-spacing:10px;text-align:center}
-.watermark-text .watermark-tagline{font-size:20px;font-weight:700;letter-spacing:3px;margin-top:8px;opacity:0.9}
+.watermark-text{position:absolute;top:45%;left:50%;transform:translate(-50%,-50%) rotate(-30deg);font-size:96px;font-weight:900;color:#0f2e2a;opacity:0.045;pointer-events:none;z-index:0;white-space:nowrap;letter-spacing:10px;text-align:center}
+.watermark-text .watermark-tagline{font-size:22px;font-weight:700;letter-spacing:3px;margin-top:8px;opacity:0.9}
 .header{background:linear-gradient(135deg,#0f2e2a 0%,#1a6b5e 100%);padding:32px 40px;color:#fff;position:relative;z-index:1}
 .header-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px}
 .header h1{font-size:28px;font-weight:800;letter-spacing:-0.5px;margin-bottom:4px;line-height:1.2}
@@ -164,7 +193,7 @@ thead th:last-child{border-radius:0 10px 0 0}
 tbody td{padding:12px 14px;border-bottom:1px solid #f3f4f6;color:#374151;font-size:13px}
 tbody tr:last-child td{border-bottom:none}
 .pay-list{display:grid;gap:8px}
-.pay-item{display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-radius:12px;background:#f9fafb;border:1px solid #f3f4f6}
+.pay-item{display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-radius:8px}
 .pay-item .left{display:flex;align-items:center;gap:14px}
 .pay-dot{width:12px;height:12px;border-radius:50%}
 .pay-item .name{font-size:14px;font-weight:600;color:#1f2937}
@@ -186,8 +215,9 @@ tbody tr:last-child td{border-bottom:none}
     </div>
     <div class="date-row">
       <span>${today}</span>
-      <span class="badge">${period === 'daily' ? 'Day Summary' : 'Month Summary'}</span>
+      <span class="badge">${period === 'daily' ? 'Day Summary' : period === 'monthly' ? 'Month Summary' : 'Custom Range'}</span>
     </div>
+    ${period === 'custom' && customReport ? `<div style="font-size:12px;opacity:0.7;margin-top:6px">${customReport.start_date} to ${customReport.end_date}</div>` : ''}
   </div>
   <div class="content">
   <div class="summary">
@@ -296,7 +326,65 @@ tbody tr:last-child td{border-bottom:none}
             <Ionicons name="calendar-outline" size={16} color={period === 'monthly' ? '#fff' : Tokens['on-surface-variant']} />
             <Text style={[styles.toggleText, period === 'monthly' && styles.toggleTextActive]}>Monthly</Text>
           </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.toggleBtn, period === 'custom' && styles.toggleBtnActive]}
+            onPress={() => setPeriod('custom')}
+          >
+            <Ionicons name="options-outline" size={16} color={period === 'custom' ? '#fff' : Tokens['on-surface-variant']} />
+            <Text style={[styles.toggleText, period === 'custom' && styles.toggleTextActive]}>Custom</Text>
+          </TouchableOpacity>
         </View>
+
+        {period === 'custom' && (
+          <View style={styles.dateRangeRow}>
+            <TouchableOpacity style={styles.dateField} onPress={() => setShowStartPicker(true)}>
+              <Text style={styles.dateLabel}>From</Text>
+              <Text style={styles.dateValue}>{customStartDisplay.toLocaleDateString('en-IN')}</Text>
+            </TouchableOpacity>
+            <Text style={styles.dateSep}>→</Text>
+            <TouchableOpacity style={styles.dateField} onPress={() => setShowEndPicker(true)}>
+              <Text style={styles.dateLabel}>To</Text>
+              <Text style={styles.dateValue}>{customEndDisplay.toLocaleDateString('en-IN')}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.dateApply} onPress={() => { setCustomFetchKey(k => k + 1); }}>
+              <Ionicons name="search" size={18} color="#fff" />
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {showStartPicker && (
+          <DateTimePicker
+            value={customStartRef.current}
+            mode="date"
+            display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+            maximumDate={customEndRef.current}
+            onChange={(event: DateTimePickerEvent, date?: Date) => {
+              if (event.type === 'dismissed' || Platform.OS !== 'ios') setShowStartPicker(false);
+              if (date) {
+                customStartRef.current = date;
+                setCustomStartDisplay(date);
+                if (Platform.OS !== 'ios') setCustomFetchKey(k => k + 1);
+              }
+            }}
+          />
+        )}
+        {showEndPicker && (
+          <DateTimePicker
+            value={customEndRef.current}
+            mode="date"
+            display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+            minimumDate={customStartRef.current}
+            maximumDate={new Date()}
+            onChange={(event: DateTimePickerEvent, date?: Date) => {
+              if (event.type === 'dismissed' || Platform.OS !== 'ios') setShowEndPicker(false);
+              if (date) {
+                customEndRef.current = date;
+                setCustomEndDisplay(date);
+                if (Platform.OS !== 'ios') setCustomFetchKey(k => k + 1);
+              }
+            }}
+          />
+        )}
 
         {/* Sales Card */}
         <View style={styles.salesCard}>
@@ -501,6 +589,24 @@ const styles = StyleSheet.create({
   topItemName: { fontSize: 15, fontWeight: '600', color: '#1c1c1e' },
   topItemUnits: { fontSize: 12, color: '#6b7280', marginTop: 1 },
   topItemRevenue: { fontSize: 15, fontWeight: '700', color: '#1c1c1e' },
+
+  // Date Range
+  dateRangeRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: '#fff', borderRadius: 14, padding: 10,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 4, elevation: 1,
+  },
+  dateField: {
+    flex: 1, paddingVertical: 10, paddingHorizontal: 14,
+    backgroundColor: '#f8faf9', borderRadius: 10, borderWidth: 1, borderColor: 'rgba(0,0,0,0.06)',
+  },
+  dateLabel: { fontSize: 11, fontWeight: '600', color: '#6b7280', marginBottom: 2 },
+  dateValue: { fontSize: 15, fontWeight: '600', color: '#1c1c1e' },
+  dateSep: { fontSize: 18, color: '#9ca3af', fontWeight: '700' },
+  dateApply: {
+    width: 40, height: 40, borderRadius: 12,
+    backgroundColor: Tokens.secondary, alignItems: 'center', justifyContent: 'center',
+  },
 
   // Empty State
   emptyState: { alignItems: 'center', justifyContent: 'center', paddingVertical: 60, gap: 12 },

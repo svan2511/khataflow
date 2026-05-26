@@ -1,7 +1,7 @@
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import * as IntentLauncher from 'expo-intent-launcher';
-import { File } from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import { Platform, Image } from 'react-native';
 import { type BillDetail } from './api';
 
@@ -89,8 +89,8 @@ body{font-family:'Inter','Helvetica Neue',Arial,sans-serif;background:#f0f2f5;pa
 .watermark{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);opacity:0.1;pointer-events:none;z-index:0;text-align:center}
 .watermark img{max-width:260px;max-height:260px}
 .watermark .watermark-tagline{font-size:15px;font-weight:700;color:#0f2e2a;letter-spacing:1.5px;margin-top:8px;opacity:0.9}
-.watermark-text{position:absolute;top:45%;left:50%;transform:translate(-50%,-50%) rotate(-30deg);font-size:76px;font-weight:900;color:#0f2e2a;opacity:0.035;pointer-events:none;z-index:0;white-space:nowrap;letter-spacing:10px;text-align:center}
-.watermark-text .watermark-tagline{font-size:20px;font-weight:700;letter-spacing:3px;margin-top:8px;opacity:0.9}
+.watermark-text{position:absolute;top:45%;left:50%;transform:translate(-50%,-50%) rotate(-30deg);font-size:96px;font-weight:900;color:#0f2e2a;opacity:0.045;pointer-events:none;z-index:0;white-space:nowrap;letter-spacing:10px;text-align:center}
+.watermark-text .watermark-tagline{font-size:22px;font-weight:700;letter-spacing:3px;margin-top:8px;opacity:0.9}
 .header{background:linear-gradient(135deg,#0f2e2a 0%,#1a6b5e 100%);padding:28px 36px;color:#fff;position:relative;z-index:1}
 .header-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px}
 .header .sub{font-size:20px;font-weight:700;opacity:0.95;letter-spacing:0.2px}
@@ -267,9 +267,10 @@ export async function generateInvoicePdf(bill: BillDetail, shopName?: string, sh
   let brandLogo = '';
   try {
     const asset = Image.resolveAssetSource(require('@/assets/images/logo.png'));
-    const file = new File(asset.uri);
-    const b64 = await file.base64();
-    brandLogo = 'data:image/png;base64,' + b64;
+    if (asset?.uri) {
+      const b64 = await FileSystem.readAsStringAsync(asset.uri, { encoding: 'base64' });
+      brandLogo = 'data:image/png;base64,' + b64;
+    }
   } catch {}
 
   const html = invoiceHTML(bill, shopName || 'KhataFlow', shopLogoBase64 || '', brandLogo, shopAddress);
