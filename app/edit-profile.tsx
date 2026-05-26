@@ -128,17 +128,17 @@ export default function EditProfileScreen() {
   }
 
   return (
-    <KeyboardAvoidingView
-      style={styles.flex}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}
-    >
-      <ScrollView
-        style={styles.container}
-        contentContainerStyle={[styles.content, { paddingTop: insets.top }]}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}
       >
+        <ScrollView
+          style={styles.container}
+          contentContainerStyle={[styles.content, { paddingTop: insets.top, paddingBottom: insets.bottom + 80 }]}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
         <View style={styles.topBar}>
           <TouchableOpacity onPress={() => router.back()} style={styles.topBarButton}>
             <Ionicons name="close" size={24} color={Tokens['on-surface']} />

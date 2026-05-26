@@ -354,7 +354,7 @@ export const api = {
       headers['Content-Type'] = 'application/json';
     }
     return request<UserProfileData>('/user/profile', {
-      method: isFormData ? 'POST' : 'PUT',
+      method: 'POST',
       body,
       headers,
     }, token);
