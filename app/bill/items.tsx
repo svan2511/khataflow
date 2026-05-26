@@ -49,7 +49,9 @@ export default function ProductSelectScreen() {
   const fetchProducts = useCallback(async (q?: string) => {
     if (!token) return;
     try {
-      const res = await api.searchProducts(token, q || undefined, 100);
+      const res = q
+        ? await api.searchProducts(token, q, 100)
+        : await api.listProducts(token, { per_page: 100 });
       setProducts(res.data || []);
     } catch {
       // silently fail
