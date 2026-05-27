@@ -1,5 +1,3 @@
-//const API_BASE = 'http://192.168.1.9:8000/api';
-
 const API_BASE = 'https://khata-flow-api.onrender.com/api';
 
 export interface ApiResponse<T = any> {

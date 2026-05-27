@@ -28,17 +28,23 @@ let initPromise: Promise<typeof i18next> | null = null;
 export async function initI18n() {
   if (initPromise) return initPromise;
 
-  const lng = await getStoredLanguage();
+  try {
+    const lng = await getStoredLanguage();
 
-  initPromise = i18next.use(initReactI18next).init({
-    resources,
-    lng,
-    fallbackLng: 'en',
-    interpolation: {
-      escapeValue: false,
-    },
-    compatibilityJSON: 'v4',
-  });
+    initPromise = i18next.use(initReactI18next).init({
+      resources,
+      lng,
+      fallbackLng: 'en',
+      interpolation: {
+        escapeValue: false,
+      },
+      compatibilityJSON: 'v4',
+    });
+  } catch (error) {
+    console.error('i18n initialization error:', error);
+    // Return a dummy promise that resolves so the app doesn't hang
+    return Promise.resolve(i18next);
+  }
 
   return initPromise;
 }

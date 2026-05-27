@@ -34,13 +34,17 @@ const USER_KEY = 'auth_user';
 const CLEAR_FLAG_KEY = 'force_clear_done';
 
 async function clearStaleAuth() {
-  const done = await SecureStore.getItemAsync(CLEAR_FLAG_KEY);
-  if (done) return;
-  await Promise.all([
-    SecureStore.deleteItemAsync(TOKEN_KEY),
-    SecureStore.deleteItemAsync(USER_KEY),
-  ]);
-  await SecureStore.setItemAsync(CLEAR_FLAG_KEY, '1');
+  try {
+    const done = await SecureStore.getItemAsync(CLEAR_FLAG_KEY);
+    if (done) return;
+    await Promise.all([
+      SecureStore.deleteItemAsync(TOKEN_KEY),
+      SecureStore.deleteItemAsync(USER_KEY),
+    ]);
+    await SecureStore.setItemAsync(CLEAR_FLAG_KEY, '1');
+  } catch (error) {
+    console.error('Error clearing stale auth:', error);
+  }
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -51,16 +55,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   });
 
   useEffect(() => {
-    clearStaleAuth().then(loadStoredAuth);
+    let isMounted = true;
+    
+    clearStaleAuth()
+      .then(() => {
+        if (isMounted) return loadStoredAuth();
+      })
+      .catch((error) => {
+        console.error('Auth initialization error:', error);
+        if (isMounted) setState(prev => ({ ...prev, isLoading: false }));
+      });
 
     setUnauthorizedHandler(async () => {
-      await SecureStore.deleteItemAsync(TOKEN_KEY);
-      await SecureStore.deleteItemAsync(USER_KEY);
+      try {
+        await SecureStore.deleteItemAsync(TOKEN_KEY);
+        await SecureStore.deleteItemAsync(USER_KEY);
+      } catch {}
       setState({ token: null, user: null, isLoading: false });
       router.replace('/login');
     });
 
-    return () => setUnauthorizedHandler(() => {});
+    return () => {
+      isMounted = false;
+      setUnauthorizedHandler(() => {});
+    };
   }, []);
 
   async function loadStoredAuth() {
