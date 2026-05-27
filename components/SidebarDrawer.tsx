@@ -8,6 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Tokens } from '@/constants/theme';
 import { useAuth } from '@/lib/auth-context';
 import { api } from '@/lib/api';
+import { useTranslation } from 'react-i18next';
 
 const SIDEBAR_WIDTH = Math.min(Dimensions.get('window').width * 0.8, 340);
 
@@ -18,16 +19,16 @@ interface SidebarItem {
 }
 
 const menuItems: SidebarItem[] = [
-  { label: 'Dashboard', icon: 'home-outline', route: '/(tabs)' },
-  { label: 'Inventory', icon: 'cube-outline', route: '/inventory' },
-  { label: 'Customers', icon: 'people-outline', route: '/customers' },
-  { label: 'Reports', icon: 'bar-chart-outline', route: '/reports' },
+  { label: 'sidebar.dashboard', icon: 'home-outline', route: '/(tabs)' },
+  { label: 'sidebar.inventory', icon: 'cube-outline', route: '/inventory' },
+  { label: 'sidebar.customers', icon: 'people-outline', route: '/customers' },
+  { label: 'sidebar.reports', icon: 'bar-chart-outline', route: '/reports' },
 ];
 
 const bottomItems: SidebarItem[] = [
-  { label: 'Profile', icon: 'person-outline', route: '/(tabs)/profile' },
-  { label: 'Settings', icon: 'settings-outline', route: '/(tabs)/settings' },
-  { label: 'Sync', icon: 'cloudy-outline', route: '/(tabs)/sync' },
+  { label: 'sidebar.profile', icon: 'person-outline', route: '/(tabs)/profile' },
+  { label: 'sidebar.settings', icon: 'settings-outline', route: '/(tabs)/settings' },
+  { label: 'sidebar.sync', icon: 'cloudy-outline', route: '/(tabs)/sync' },
 ];
 
 const menuIcons: Record<string, { focused: keyof typeof Ionicons.glyphMap; bg: string }> = {
@@ -48,6 +49,7 @@ interface SidebarDrawerProps {
 
 export default function SidebarDrawer({ visible, onClose, activeRoute }: SidebarDrawerProps) {
   const { token, user } = useAuth();
+  const { t } = useTranslation();
   const [shopName, setShopName] = useState('KhataFlow');
   const [shopLogo, setShopLogo] = useState<string | null>(null);
   const slideAnim = useRef(new Animated.Value(-SIDEBAR_WIDTH)).current;
@@ -154,9 +156,8 @@ export default function SidebarDrawer({ visible, onClose, activeRoute }: Sidebar
 
           <View style={styles.dividerWide} />
 
-          {/* Main Menu */}
           <View style={styles.menuSection}>
-            <Text style={styles.menuSectionLabel}>Main Menu</Text>
+            <Text style={styles.menuSectionLabel}>{t('sidebar.mainMenu')}</Text>
             {menuItems.map((item, i) => {
               const active = isActive(item.route);
               const icons = menuIcons[item.route];
@@ -175,7 +176,7 @@ export default function SidebarDrawer({ visible, onClose, activeRoute }: Sidebar
                       />
                     </View>
                     <Text style={[styles.menuLabel, active && styles.menuLabelActive]}>
-                      {item.label}
+                      {t(item.label)}
                     </Text>
                     {active && <View style={styles.activeBar} />}
                   </TouchableOpacity>
@@ -186,9 +187,8 @@ export default function SidebarDrawer({ visible, onClose, activeRoute }: Sidebar
 
           <View style={styles.divider} />
 
-          {/* Other Menu */}
           <View style={styles.menuSection}>
-            <Text style={styles.menuSectionLabel}>Other</Text>
+            <Text style={styles.menuSectionLabel}>{t('sidebar.other')}</Text>
             {bottomItems.map((item, i) => {
               const active = isActive(item.route);
               const icons = menuIcons[item.route];
@@ -207,7 +207,7 @@ export default function SidebarDrawer({ visible, onClose, activeRoute }: Sidebar
                       />
                     </View>
                     <Text style={[styles.menuLabel, active && styles.menuLabelActive]}>
-                      {item.label}
+                      {t(item.label)}
                     </Text>
                   </TouchableOpacity>
                 </Animated.View>
@@ -215,7 +215,6 @@ export default function SidebarDrawer({ visible, onClose, activeRoute }: Sidebar
             })}
           </View>
 
-          {/* Footer */}
           <View style={styles.footer}>
             <Text style={styles.footerText}>KhataFlow v1.0</Text>
           </View>

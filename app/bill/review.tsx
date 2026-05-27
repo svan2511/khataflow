@@ -8,20 +8,22 @@ import { useBill } from '@/lib/bill-context';
 import { useAuth } from '@/lib/auth-context';
 import { api } from '@/lib/api';
 import Loader from '@/components/Loader';
-
-const PAYMENT_MODES = [
-  { key: 'Cash', icon: 'cash', label: 'Cash' },
-  { key: 'UPI', icon: 'phone-portrait', label: 'UPI' },
-  { key: 'Card', icon: 'card', label: 'Card' },
-  { key: 'Udhaar', icon: 'book', label: 'Udhaar' },
-] as const;
+import { useTranslation } from 'react-i18next';
 
 export default function BillReviewScreen() {
+  const { t } = useTranslation();
   const {
     items, customer, paymentMode, discount, notes,
     subtotal, discountAmount, taxAmount, grandTotal,
     setPaymentMode, resetBill,
   } = useBill();
+
+  const PAYMENT_MODES = [
+    { key: 'Cash', icon: 'cash', label: t('paymentMethods.cash') },
+    { key: 'UPI', icon: 'phone-portrait', label: t('paymentMethods.upi') },
+    { key: 'Card', icon: 'card', label: t('paymentMethods.card') },
+    { key: 'Udhaar', icon: 'book', label: t('paymentMethods.udhaar') },
+  ] as const;
   const { token } = useAuth();
   const [submitting, setSubmitting] = useState(false);
   const insets = useSafeAreaInsets();
@@ -75,8 +77,8 @@ export default function BillReviewScreen() {
 
     if (dueAmount > 0 && !customer?.uuid) {
       Alert.alert(
-        'Customer Required',
-        'Please select a customer to track Udhaar for the remaining ₹' + dueAmount.toFixed(2) + '.',
+        t('bill.customerRequired'),
+        t('bill.customerRequiredForUdhaar', { amount: dueAmount.toFixed(2) }),
       );
       return;
     }
@@ -117,7 +119,7 @@ export default function BillReviewScreen() {
         params: { bill: JSON.stringify(res.data) },
       });
     } catch (e: any) {
-      setError(e.message || 'Failed to create bill');
+      setError(e.message || t('bill.failedToCreateBill'));
     } finally {
       setSubmitting(false);
     }
@@ -129,7 +131,7 @@ export default function BillReviewScreen() {
         <TouchableOpacity style={styles.iconButton} onPress={() => router.back()}>
           <Ionicons name="arrow-back" size={24} color={Tokens['on-surface-variant']} />
         </TouchableOpacity>
-        <Text style={styles.topBarTitle}>Review Bill</Text>
+        <Text style={styles.topBarTitle}>{t('bill.reviewBill')}</Text>
         <View style={{ width: 48 }} />
       </View>
 
@@ -145,19 +147,19 @@ export default function BillReviewScreen() {
               )}
             </View>
             <Text style={styles.billStoreName}>{shopName}</Text>
-            <Text style={styles.billDate}>Generated on {new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</Text>
+            <Text style={styles.billDate}>{t('bill.generatedOn')} {new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</Text>
           </View>
 
           <View style={styles.billCustomer}>
             <Ionicons name="person-outline" size={18} color={Tokens['on-surface-variant']} />
             <View>
-              <Text style={styles.billSectionLabel}>Customer</Text>
-              <Text style={styles.billSectionValue}>{customer?.name || 'Walk-in Customer'}</Text>
+              <Text style={styles.billSectionLabel}>{t('common.customer')}</Text>
+              <Text style={styles.billSectionValue}>{customer?.name || t('bill.walkInCustomer')}</Text>
             </View>
           </View>
 
           <View style={styles.billItemsSection}>
-            <Text style={styles.billSectionLabel}>Items ({items.length})</Text>
+            <Text style={styles.billSectionLabel}>{t('bill.items')} ({items.length})</Text>
             {items.map(item => {
               const itemSubtotal = item.rate * item.quantity;
               const gstAmt = (item.gstRate ?? 0) > 0 ? Math.round(itemSubtotal * (item.gstRate ?? 0) / 100) : 0;
@@ -178,13 +180,13 @@ export default function BillReviewScreen() {
 
           <View style={styles.billSummary}>
             <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Subtotal</Text>
+              <Text style={styles.summaryLabel}>{t('bill.subtotal')}</Text>
               <Text style={styles.summaryValue}>₹{subtotal}</Text>
             </View>
             {discount && (
               <View style={styles.summaryRow}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                  <Text style={styles.summaryLabel}>Discount</Text>
+                  <Text style={styles.summaryLabel}>{t('bill.discount')}</Text>
                   <View style={styles.discountBadge}>
                     <Text style={styles.discountBadgeText}>{discount.type === 'percentage' ? `${discount.value}% OFF` : `₹${discount.value} OFF`}</Text>
                   </View>
@@ -194,19 +196,19 @@ export default function BillReviewScreen() {
             )}
             {taxAmount > 0 && (
               <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>GST</Text>
+                <Text style={styles.summaryLabel}>{t('bill.gst')}</Text>
                 <Text style={styles.summaryValue}>₹{taxAmount}</Text>
               </View>
             )}
             <View style={[styles.summaryRow, styles.totalRow]}>
-              <Text style={styles.totalLabel}>Grand Total</Text>
+              <Text style={styles.totalLabel}>{t('bill.grandTotal')}</Text>
               <Text style={styles.totalValue}>₹{grandTotal}</Text>
             </View>
           </View>
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Payment Mode</Text>
+          <Text style={styles.sectionTitle}>{t('bill.paymentMode')}</Text>
           <View style={styles.paymentGrid}>
             {PAYMENT_MODES.map(mode => (
               <TouchableOpacity
@@ -227,7 +229,7 @@ export default function BillReviewScreen() {
 
         {paymentMode !== 'Udhaar' && (
           <View style={styles.paidSection}>
-            <Text style={styles.paidSectionTitle}>💳 Amount Paid</Text>
+            <Text style={styles.paidSectionTitle}>💳 {t('bill.amountPaid')}</Text>
             <View style={styles.paidInputContainer}>
               <Text style={styles.paidCurrencySign}>₹</Text>
               <TextInput
@@ -243,22 +245,22 @@ export default function BillReviewScreen() {
                 selectTextOnFocus
               />
               <View style={styles.paidTotalBadge}>
-                <Text style={styles.paidTotalBadgeText}>of ₹{grandTotal}</Text>
+                <Text style={styles.paidTotalBadgeText}>{t('common.of')} ₹{grandTotal}</Text>
               </View>
             </View>
             <View style={styles.paidHintRow}>
               <Ionicons name="information-circle-outline" size={14} color={Tokens['on-surface-variant']} />
               <Text style={styles.paidHintText}>
                 {paidAmount >= grandTotal
-                  ? 'Full payment — no Udhaar'
-                  : `₹${dueAmount.toFixed(2)} will go as Udhaar`
+                  ? t('bill.fullPayment')
+                  : t('bill.willGoAsUdhaar', { amount: dueAmount.toFixed(2) })
                 }
               </Text>
             </View>
             {dueAmount > 0 && !customer?.name && (
               <View style={styles.dueWarning}>
                 <Ionicons name="alert-circle" size={16} color={Tokens.tertiary} />
-                <Text style={styles.dueWarningText}>Select a customer to track Udhaar credit.</Text>
+                <Text style={styles.dueWarningText}>{t('bill.selectCustomerForUdhaar')}</Text>
               </View>
             )}
           </View>
@@ -271,9 +273,11 @@ export default function BillReviewScreen() {
                 <Ionicons name="book" size={22} color={Tokens.tertiary} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.udhaarNoticeTitle}>Full Udhaar</Text>
+                <Text style={styles.udhaarNoticeTitle}>{t('bill.fullUdhaar')}</Text>
                 <Text style={styles.udhaarNoticeText}>
-                  ₹{grandTotal} will be added to {customer?.name ? `${customer.name}'s account` : 'customer account'}.
+                  {customer?.name
+                    ? t('bill.fullUdhaarText', { amount: grandTotal, name: customer.name })
+                    : t('bill.fullUdhaarTextGeneric', { amount: grandTotal })}
                 </Text>
               </View>
             </View>
@@ -298,7 +302,7 @@ export default function BillReviewScreen() {
 
       <View style={[styles.bottomBar, { paddingBottom: (Spacing as any).md + insets.bottom }]}>
         <View style={styles.bottomSummary}>
-          <Text style={styles.bottomLabel}>Amount to Collect</Text>
+          <Text style={styles.bottomLabel}>{t('bill.amountToCollect')}</Text>
           <Text style={styles.bottomAmount}>₹{grandTotal}</Text>
         </View>
         <TouchableOpacity
@@ -311,7 +315,7 @@ export default function BillReviewScreen() {
             <Loader size={20} color={Tokens['on-primary']} />
           ) : (
             <>
-              <Text style={styles.confirmBtnText}>Confirm & Generate Bill</Text>
+              <Text style={styles.confirmBtnText}>{t('bill.confirmGenerate')}</Text>
               <Ionicons name="checkmark-circle" size={20} color={Tokens['on-primary']} />
             </>
           )}

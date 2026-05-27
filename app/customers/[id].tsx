@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router, useFocusEffect } from 'expo-router';
@@ -10,6 +11,7 @@ import { api, CustomerDetail, BillListItem } from '@/lib/api';
 export default function CustomerDetailScreen() {
   const { token } = useAuth();
   const { id } = useLocalSearchParams<{ id: string }>();
+  const { t } = useTranslation();
   const [customer, setCustomer] = useState<CustomerDetail | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -44,7 +46,7 @@ export default function CustomerDetailScreen() {
     return (
       <SafeAreaView style={styles.safe} edges={['top']}>
         <Text style={{ textAlign: 'center', marginTop: 60, color: Tokens['on-surface-variant'] }}>
-          Customer not found.
+          {t('customers.notFound')}
         </Text>
       </SafeAreaView>
     );
@@ -60,7 +62,7 @@ export default function CustomerDetailScreen() {
           <TouchableOpacity style={styles.topBtn} onPress={() => router.back()}>
             <Ionicons name="arrow-back" size={22} color={Tokens.secondary} />
           </TouchableOpacity>
-          <Text style={styles.topTitle}>Customer Details</Text>
+          <Text style={styles.topTitle}>{t('customers.customerDetail')}</Text>
         </View>
         <TouchableOpacity style={styles.topBtn} onPress={() => (router as any).push('/customers/add?id=' + id)}>
           <Ionicons name="create-outline" size={22} color={Tokens.secondary} />
@@ -83,15 +85,15 @@ export default function CustomerDetailScreen() {
         </View>
 
         <View style={styles.balanceCard}>
-          <Text style={styles.balanceLabel}>NET OUTSTANDING BALANCE</Text>
+          <Text style={styles.balanceLabel}>{t('customers.netOutstandingBalance')}</Text>
           <Text style={styles.balanceAmount}>₹ {credit.toFixed(2)}</Text>
           <Text style={styles.balanceDesc}>
-            {credit > 0 ? 'Customer owes you' : 'No outstanding balance'}
+            {credit > 0 ? t('customers.customerOwes') : t('customers.noBalance')}
           </Text>
           <View style={styles.balanceActions}>
             <TouchableOpacity style={styles.recordPaymentBtn} onPress={() => (router as any).push('/bill/history')}>
               <Ionicons name="receipt-outline" size={18} color={Tokens['on-primary']} />
-              <Text style={styles.recordPaymentText}>View All Bills</Text>
+              <Text style={styles.recordPaymentText}>{t('common.viewAll')}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.newBillBtn} onPress={() => (router as any).push({
                 pathname: '/bill/items',
@@ -102,7 +104,7 @@ export default function CustomerDetailScreen() {
                 },
               })}>
               <Ionicons name="receipt-outline" size={18} color={Tokens.primary} />
-              <Text style={styles.newBillText}>New Bill</Text>
+              <Text style={styles.newBillText}>{t('customers.createBill')}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -110,26 +112,26 @@ export default function CustomerDetailScreen() {
         {customer.credit_summary && (
           <View style={styles.summaryRow}>
             <View style={styles.summaryCard}>
-              <Text style={styles.summaryLabel}>Total Billed</Text>
-              <Text style={styles.summaryValue}>₹{Number(customer.credit_summary.total_billed).toLocaleString('en-IN')}</Text>
+              <Text style={styles.summaryLabel}>{t('customers.totalBills')}</Text>
+              <Text style={styles.summaryValue}>₹{Number.isInteger(customer.credit_summary.total_billed) ? Number(customer.credit_summary.total_billed).toLocaleString('en-IN') : Number(customer.credit_summary.total_billed).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Text>
             </View>
             <View style={styles.summaryCard}>
-              <Text style={styles.summaryLabel}>Total Paid</Text>
+              <Text style={styles.summaryLabel}>{t('customers.totalPaid')}</Text>
               <Text style={[styles.summaryValue, { color: Tokens.secondary }]}>
-                ₹{Number(customer.credit_summary.total_paid).toLocaleString('en-IN')}
+                ₹{Number.isInteger(customer.credit_summary.total_paid) ? Number(customer.credit_summary.total_paid).toLocaleString('en-IN') : Number(customer.credit_summary.total_paid).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </Text>
             </View>
             <View style={styles.summaryCard}>
-              <Text style={styles.summaryLabel}>Outstanding</Text>
+              <Text style={styles.summaryLabel}>{t('customers.totalCredit')}</Text>
               <Text style={[styles.summaryValue, { color: Tokens.error }]}>
-                ₹{Number(customer.credit_summary.outstanding).toLocaleString('en-IN')}
+                ₹{Number.isInteger(customer.credit_summary.outstanding) ? Number(customer.credit_summary.outstanding).toLocaleString('en-IN') : Number(customer.credit_summary.outstanding).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </Text>
             </View>
           </View>
         )}
 
         <View style={styles.transactionsSection}>
-          <Text style={styles.transactionsTitle}>Recent Transactions</Text>
+          <Text style={styles.transactionsTitle}>{t('customers.billHistory')}</Text>
           {customer.bills && customer.bills.length > 0 ? (
             <View style={styles.transactionsList}>
               {customer.bills.map((bill: BillListItem, i: number) => {
@@ -161,7 +163,7 @@ export default function CustomerDetailScreen() {
                       <Text style={[styles.txStatusLabel, {
                         color: isPaid ? '#16a34a' : isPartial ? '#dc2626' : '#dc2626',
                       }]}>
-                        {isPaid ? 'Paid' : isPartial ? 'Partial' : 'Due'}
+                        {isPaid ? t('bill.statusPaid') : isPartial ? t('bill.statusPartial') : t('bill.statusPending')}
                       </Text>
                     </View>
                   </TouchableOpacity>
@@ -189,7 +191,7 @@ export default function CustomerDetailScreen() {
               )})}
             </View>
           ) : (
-            <Text style={styles.noTx}>No transactions yet.</Text>
+            <Text style={styles.noTx}>{t('customers.noBillsYet')}</Text>
           )}
         </View>
       </ScrollView>

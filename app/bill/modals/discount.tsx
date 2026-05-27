@@ -4,10 +4,12 @@ import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Tokens, Typography, Spacing, BorderRadius } from '@/constants/theme';
 import { useBill } from '@/lib/bill-context';
+import { useTranslation } from 'react-i18next';
 
 const presets = [5, 10, 15, 20];
 
 export default function DiscountModal() {
+  const { t } = useTranslation();
   const { discount, setDiscount, subtotal, discountAmount } = useBill();
   const [type, setType] = useState<'percentage' | 'fixed'>(discount?.type || 'percentage');
   const [value, setValue] = useState(discount?.value.toString() || '');
@@ -33,7 +35,7 @@ export default function DiscountModal() {
         <View style={styles.sheet}>
           <View style={styles.handle} />
           <View style={styles.header}>
-            <Text style={styles.title}>Add Discount</Text>
+            <Text style={styles.title}>{t('bill.addDiscount')}</Text>
             <TouchableOpacity onPress={() => router.back()} style={styles.closeBtn}>
               <Ionicons name="close" size={24} color={Tokens['on-surface-variant']} />
             </TouchableOpacity>
@@ -45,18 +47,18 @@ export default function DiscountModal() {
               style={[styles.toggleBtn, type === 'percentage' && styles.toggleBtnActive]}
               onPress={() => setType('percentage')}
             >
-              <Text style={[styles.toggleText, type === 'percentage' && styles.toggleTextActive]}>% Percentage</Text>
+              <Text style={[styles.toggleText, type === 'percentage' && styles.toggleTextActive]}>{t('bill.percentage')}</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.toggleBtn, type === 'fixed' && styles.toggleBtnActive]}
               onPress={() => setType('fixed')}
             >
-              <Text style={[styles.toggleText, type === 'fixed' && styles.toggleTextActive]}>₹ Fixed Amount</Text>
+              <Text style={[styles.toggleText, type === 'fixed' && styles.toggleTextActive]}>{t('bill.fixedAmount')}</Text>
             </TouchableOpacity>
           </View>
 
           <View>
-            <Text style={styles.label}>{type === 'percentage' ? 'Discount Percentage' : 'Discount Amount'}</Text>
+            <Text style={styles.label}>{type === 'percentage' ? t('bill.discountPercentage') : t('bill.discountAmount')}</Text>
             <View style={styles.inputRow}>
               <TextInput
                 style={styles.input}
@@ -72,7 +74,7 @@ export default function DiscountModal() {
 
           {type === 'percentage' && (
             <View>
-              <Text style={styles.presetLabel}>Quick Select</Text>
+              <Text style={styles.presetLabel}>{t('bill.quickSelect')}</Text>
               <View style={styles.presetRow}>
                 {presets.map(p => (
                   <TouchableOpacity
@@ -89,21 +91,21 @@ export default function DiscountModal() {
 
           <View style={styles.preview}>
             <View style={styles.previewCol}>
-              <Text style={styles.previewLabel}>Subtotal</Text>
+              <Text style={styles.previewLabel}>{t('common.subtotal')}</Text>
               <Text style={styles.previewValue}>₹{subtotal}</Text>
             </View>
             <View style={styles.previewCol}>
-              <Text style={styles.previewLabel}>Discount</Text>
+              <Text style={styles.previewLabel}>{t('common.discount')}</Text>
               <Text style={[styles.previewValue, { color: Tokens.secondary }]}>-₹{Math.round(computedDiscount)}</Text>
             </View>
             <View style={styles.previewCol}>
-              <Text style={styles.previewLabel}>After Discount</Text>
+              <Text style={styles.previewLabel}>{t('bill.afterDiscount')}</Text>
               <Text style={styles.previewValue}>₹{Math.round(afterDiscount)}</Text>
             </View>
           </View>
 
           <TouchableOpacity style={styles.applyBtn} onPress={handleApply} activeOpacity={0.9}>
-            <Text style={styles.applyText}>Apply Discount</Text>
+            <Text style={styles.applyText}>{t('bill.apply')}</Text>
           </TouchableOpacity>
           </ScrollView>
         </View>

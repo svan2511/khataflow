@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet, ActivityIndicator } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -10,6 +11,7 @@ export default function LowStockAlertModal() {
   const { token } = useAuth();
   const [lowStockItems, setLowStockItems] = useState<ProductData[]>([]);
   const [loading, setLoading] = useState(true);
+  const { t } = useTranslation();
 
   useEffect(() => {
     if (token) fetchLowStock();
@@ -37,7 +39,7 @@ export default function LowStockAlertModal() {
               <Ionicons name="warning" size={22} color={Tokens['on-error-container']} />
             </View>
             <View>
-              <Text style={styles.headerTitle}>Low Stock Alert</Text>
+              <Text style={styles.headerTitle}>{t('inventory.lowStockAlert')}</Text>
               <Text style={styles.headerSub}>
                 {lowStockItems.length} item{lowStockItems.length !== 1 ? 's' : ''} require{lowStockItems.length === 1 ? 's' : ''} attention.
               </Text>
@@ -87,7 +89,7 @@ export default function LowStockAlertModal() {
                       color={Number(item.stock_quantity) <= 0 ? Tokens['on-error'] : Tokens['on-primary']}
                     />
                     <Text style={[styles.actionText, Number(item.stock_quantity) <= 0 && { color: Tokens['on-error'] }]}>
-                      {Number(item.stock_quantity) <= 0 ? 'Urgent Order' : 'Stock In'}
+                      {Number(item.stock_quantity) <= 0 ? 'Urgent Order' : t('inventory.stockIn')}
                     </Text>
                   </TouchableOpacity>
                 </View>
@@ -99,11 +101,11 @@ export default function LowStockAlertModal() {
         {/* Footer Actions */}
         <View style={styles.footer}>
           <TouchableOpacity style={styles.dismissBtn} onPress={() => router.back()}>
-            <Text style={styles.dismissText}>Dismiss Alerts</Text>
+            <Text style={styles.dismissText}>{t('common.dismiss')}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.inventoryBtn} onPress={() => (router as any).replace('/inventory')}>
             <Ionicons name="cube-outline" size={18} color={Tokens['on-primary']} />
-            <Text style={styles.inventoryBtnText}>View Full Inventory</Text>
+            <Text style={styles.inventoryBtnText}>{t('common.viewAll')}</Text>
           </TouchableOpacity>
         </View>
       </View>

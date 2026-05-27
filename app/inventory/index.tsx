@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { View, Text, TouchableOpacity, ScrollView, TextInput, StyleSheet, ActivityIndicator, RefreshControl, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useFocusEffect } from 'expo-router';
@@ -18,6 +19,7 @@ export default function ProductsListScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [categories, setCategories] = useState<string[]>(['All Items', 'Low Stock']);
   const [totalProducts, setTotalProducts] = useState(0);
+  const { t } = useTranslation();
 
   const fetchProducts = useCallback(async (isRefresh = false) => {
     if (!token) return;
@@ -86,8 +88,8 @@ export default function ProductsListScreen() {
           <Ionicons name="menu" size={24} color={Tokens.secondary} />
         </TouchableOpacity>
         <View>
-          <Text style={styles.topTitle}>Inventory</Text>
-          <Text style={styles.topSubtitle}>{totalProducts} products</Text>
+          <Text style={styles.topTitle}>{t('inventory.title')}</Text>
+          <Text style={styles.topSubtitle}>{totalProducts} {t('inventory.products')}</Text>
         </View>
         <TouchableOpacity style={styles.iconBtn} onPress={() => fetchProducts(true)}>
           <Ionicons name="refresh" size={24} color={Tokens.secondary} />
@@ -107,21 +109,21 @@ export default function ProductsListScreen() {
               <Ionicons name="cube" size={20} color="#2e7d32" />
             </View>
             <Text style={styles.statValue}>{totalProducts}</Text>
-            <Text style={styles.statLabel}>Total Products</Text>
+            <Text style={styles.statLabel}>{t('inventory.totalProducts')}</Text>
           </View>
           <View style={styles.statCard}>
             <View style={[styles.statIcon, { backgroundColor: '#fff3e0' }]}>
               <Ionicons name="warning-outline" size={20} color="#e65100" />
             </View>
             <Text style={[styles.statValue, { color: '#e65100' }]}>{lowStockCount}</Text>
-            <Text style={styles.statLabel}>Low Stock</Text>
+            <Text style={styles.statLabel}>{t('inventory.lowStock')}</Text>
           </View>
           <View style={styles.statCard}>
             <View style={[styles.statIcon, { backgroundColor: '#e3f2fd' }]}>
               <Ionicons name="pricetags-outline" size={20} color="#1565c0" />
             </View>
             <Text style={[styles.statValue, { color: '#1565c0' }]}>{categories.length - 2}</Text>
-            <Text style={styles.statLabel}>Categories</Text>
+            <Text style={styles.statLabel}>{t('inventory.categories')}</Text>
           </View>
         </View>
 
@@ -131,7 +133,7 @@ export default function ProductsListScreen() {
             <Ionicons name="search" size={20} color={Tokens.outline} />
             <TextInput
               style={styles.searchInput}
-              placeholder="Search products, categories or barcodes..."
+              placeholder={t('inventory.searchProducts')}
               placeholderTextColor={Tokens.outline}
               value={search}
               onChangeText={setSearch}
@@ -146,7 +148,7 @@ export default function ProductsListScreen() {
                   onPress={() => setActiveCategory(cat)}
                 >
                   <Text style={[styles.chipText, activeCategory === cat && styles.chipTextActive]}>
-                    {cat}
+                    {cat === 'All Items' ? t('inventory.allItems') : cat === 'Low Stock' ? t('inventory.lowStock') : cat}
                   </Text>
                 </TouchableOpacity>
               ))}
@@ -162,8 +164,8 @@ export default function ProductsListScreen() {
             <View style={styles.emptyIconWrap}>
               <Ionicons name="search-outline" size={36} color="#d1d5db" />
             </View>
-            <Text style={styles.emptyTitle}>No products found</Text>
-            <Text style={styles.emptySub}>Try adjusting your search or add a new product.</Text>
+            <Text style={styles.emptyTitle}>{t('inventory.noProducts')}</Text>
+            <Text style={styles.emptySub}>{t('inventory.noProductsSub')}</Text>
           </View>
         ) : (
           <View style={styles.productGrid}>
@@ -194,7 +196,7 @@ export default function ProductsListScreen() {
                       <View style={[styles.badgeStock, product.is_low_stock && styles.badgeStockLow]}>
                         <View style={[styles.dot, product.is_low_stock ? styles.dotLow : styles.dotOk]} />
                         <Text style={[styles.badgeStockText, product.is_low_stock && { color: '#dc2626' }]}>
-                          {product.is_low_stock ? 'Low' : 'In Stock'}
+                          {product.is_low_stock ? t('inventory.lowStock') : t('inventory.inStock')}
                         </Text>
                       </View>
                     </View>
@@ -208,12 +210,12 @@ export default function ProductsListScreen() {
 
                 <View style={styles.productMeta}>
                   <View style={styles.metaItem}>
-                    <Text style={styles.metaLabel}>Price</Text>
+                    <Text style={styles.metaLabel}>{t('inventory.price')}</Text>
                     <Text style={styles.metaPrice}>₹{Number(product.price).toFixed(2)}</Text>
                   </View>
                   <View style={styles.metaDivider} />
                   <View style={styles.metaItem}>
-                    <Text style={styles.metaLabel}>Stock</Text>
+                    <Text style={styles.metaLabel}>{t('inventory.stock')}</Text>
                     <Text style={[styles.metaStock, product.is_low_stock && { color: '#dc2626' }]}>
                       {Number(product.stock_quantity)} {product.unit}
                     </Text>
@@ -233,8 +235,8 @@ export default function ProductsListScreen() {
               <View style={styles.addIconWrap}>
                 <Ionicons name="add" size={32} color="#fff" />
               </View>
-              <Text style={styles.addTitle}>Add New Product</Text>
-              <Text style={styles.addSub}>Scan barcode or enter details manually</Text>
+              <Text style={styles.addTitle}>{t('inventory.addProduct')}</Text>
+              <Text style={styles.addSub}>{t('inventory.addProductSub')}</Text>
             </TouchableOpacity>
           </View>
         )}

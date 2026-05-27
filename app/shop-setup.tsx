@@ -13,6 +13,7 @@ import { Tokens, Typography, Spacing, BorderRadius } from '@/constants/theme';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth-context';
 import { useToast } from '@/components/toast-provider';
+import { useTranslation } from 'react-i18next';
 
 const { width } = Dimensions.get('window');
 
@@ -31,6 +32,7 @@ export default function ShopSetupScreen() {
   const [step, setStep] = useState(0);
   const { token, user, setUser } = useAuth();
   const { showToast } = useToast();
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
 
   const slideAnim = useRef(new Animated.Value(0)).current;
@@ -63,7 +65,7 @@ export default function ShopSetupScreen() {
 
   const nextStep = () => {
     if (step === 0 && !shopName.trim()) {
-      showToast({ type: 'info', title: 'Required', message: 'Shop name is needed to continue.' });
+      showToast({ type: 'info', title: t('common.required'), message: t('shopSetup.shopNameRequired') });
       return;
     }
     animateToStep(step + 1);
@@ -74,7 +76,7 @@ export default function ShopSetupScreen() {
   const pickLogo = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
-      showToast({ type: 'info', title: 'Permission needed', message: 'Allow gallery access to add a logo.' });
+      showToast({ type: 'info', title: t('common.permissionNeeded'), message: t('shopSetup.galleryPermission') });
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -112,7 +114,7 @@ export default function ShopSetupScreen() {
       setUser({ ...user!, has_shop: true });
       router.replace('/(tabs)');
     } catch (err: any) {
-      showToast({ type: 'error', title: 'Shop setup failed', message: err.message });
+      showToast({ type: 'error', title: t('shopSetup.setupFailed'), message: err.message });
     } finally {
       setLoading(false);
     }
@@ -137,8 +139,8 @@ export default function ShopSetupScreen() {
             <View style={styles.brandBadge}>
               <Ionicons name="storefront" size={22} color={Tokens['on-secondary-container']} />
             </View>
-            <Text style={styles.title}>Set up your shop</Text>
-            <Text style={styles.subtitle}>Step {step + 1} of {STEPS.length} — {STEPS[step]}</Text>
+            <Text style={styles.title}>{t('shopSetup.title')}</Text>
+            <Text style={styles.subtitle}>{t('shopSetup.step')} {step + 1} {t('common.of')} {STEPS.length} — {t(`shopSetup.${STEPS[step].toLowerCase()}`)}</Text>
           </View>
 
           <View style={styles.progress}>
@@ -162,12 +164,12 @@ export default function ShopSetupScreen() {
             {step === 0 && (
               <View style={styles.form}>
                 <View style={styles.fieldGroup}>
-                  <Text style={styles.label}>Shop Name</Text>
+                  <Text style={styles.label}>{t('shopSetup.shopName')}</Text>
                   <View style={styles.inputWrapper}>
                     <Ionicons name="storefront-outline" size={18} color={Tokens['on-surface-variant']} style={styles.inputIcon} />
                     <TextInput
                       style={styles.input}
-                      placeholder="e.g. Sharma Kirana Store"
+                      placeholder={t('shopSetup.shopNamePlaceholder')}
                       placeholderTextColor={Tokens.outline}
                       value={shopName}
                       onChangeText={setShopName}
@@ -175,12 +177,12 @@ export default function ShopSetupScreen() {
                   </View>
                 </View>
                 <View style={styles.fieldGroup}>
-                  <Text style={styles.label}>Owner Name</Text>
+                  <Text style={styles.label}>{t('shopSetup.ownerName')}</Text>
                   <View style={styles.inputWrapper}>
                     <Ionicons name="person-outline" size={18} color={Tokens['on-surface-variant']} style={styles.inputIcon} />
                     <TextInput
                       style={styles.input}
-                      placeholder="Your full name"
+                      placeholder={t('shopSetup.ownerNamePlaceholder')}
                       placeholderTextColor={Tokens.outline}
                       value={ownerName}
                       onChangeText={setOwnerName}
@@ -188,12 +190,12 @@ export default function ShopSetupScreen() {
                   </View>
                 </View>
                 <View style={styles.fieldGroup}>
-                  <Text style={styles.label}>GSTIN (optional)</Text>
+                  <Text style={styles.label}>{t('shopSetup.gstin')}</Text>
                   <View style={styles.inputWrapper}>
                     <Ionicons name="receipt-outline" size={18} color={Tokens['on-surface-variant']} style={styles.inputIcon} />
                     <TextInput
                       style={styles.input}
-                      placeholder="15-digit GSTIN"
+                      placeholder={t('shopSetup.gstinPlaceholder')}
                       placeholderTextColor={Tokens.outline}
                       autoCapitalize="characters"
                       maxLength={15}
@@ -208,12 +210,12 @@ export default function ShopSetupScreen() {
             {step === 1 && (
               <View style={styles.form}>
                 <View style={styles.fieldGroup}>
-                  <Text style={styles.label}>Address</Text>
+                  <Text style={styles.label}>{t('shopSetup.address')}</Text>
                   <View style={styles.inputWrapper}>
                     <Ionicons name="location-outline" size={18} color={Tokens['on-surface-variant']} style={styles.inputIcon} />
                     <TextInput
                       style={[styles.input, styles.textarea]}
-                      placeholder="Complete address"
+                      placeholder={t('shopSetup.addressPlaceholder')}
                       placeholderTextColor={Tokens.outline}
                       multiline
                       numberOfLines={3}
@@ -224,11 +226,11 @@ export default function ShopSetupScreen() {
                 </View>
                 <View style={styles.row}>
                   <View style={[styles.fieldGroup, { flex: 1 }]}>
-                    <Text style={styles.label}>City</Text>
+                    <Text style={styles.label}>{t('shopSetup.city')}</Text>
                     <View style={styles.inputWrapper}>
                       <TextInput
                         style={styles.input}
-                        placeholder="City"
+                        placeholder={t('shopSetup.city')}
                         placeholderTextColor={Tokens.outline}
                         value={city}
                         onChangeText={setCity}
@@ -236,11 +238,11 @@ export default function ShopSetupScreen() {
                     </View>
                   </View>
                   <View style={[styles.fieldGroup, { flex: 1 }]}>
-                    <Text style={styles.label}>State</Text>
+                    <Text style={styles.label}>{t('shopSetup.state')}</Text>
                     <View style={styles.inputWrapper}>
                       <TextInput
                         style={styles.input}
-                        placeholder="State"
+                        placeholder={t('shopSetup.state')}
                         placeholderTextColor={Tokens.outline}
                         value={state}
                         onChangeText={setState}
@@ -250,11 +252,11 @@ export default function ShopSetupScreen() {
                 </View>
                 <View style={styles.row}>
                   <View style={[styles.fieldGroup, { flex: 1 }]}>
-                    <Text style={styles.label}>Pincode</Text>
+                    <Text style={styles.label}>{t('shopSetup.pincode')}</Text>
                     <View style={styles.inputWrapper}>
                       <TextInput
                         style={styles.input}
-                        placeholder="6-digit pincode"
+                        placeholder={t('shopSetup.pincodePlaceholder')}
                         placeholderTextColor={Tokens.outline}
                         keyboardType="number-pad"
                         maxLength={6}
@@ -269,8 +271,8 @@ export default function ShopSetupScreen() {
 
             {step === 2 && (
               <View style={styles.logoStep}>
-                <Text style={styles.logoStepTitle}>Add a logo</Text>
-                <Text style={styles.logoStepSub}>Makes your shop instantly recognisable</Text>
+                <Text style={styles.logoStepTitle}>{t('shopSetup.addLogo')}</Text>
+                <Text style={styles.logoStepSub}>{t('shopSetup.logoSubtitle')}</Text>
                 <TouchableOpacity onPress={pickLogo} activeOpacity={0.8} style={styles.logoOuter}>
                   <View style={styles.logoContainer}>
                     {logo ? (
@@ -283,27 +285,27 @@ export default function ShopSetupScreen() {
                     ) : (
                       <View style={styles.logoEmpty}>
                         <Ionicons name="camera-outline" size={36} color={Tokens['on-surface-variant']} />
-                        <Text style={styles.logoEmptyText}>Tap to add</Text>
+                        <Text style={styles.logoEmptyText}>{t('shopSetup.tapToAdd')}</Text>
                       </View>
                     )}
                   </View>
                 </TouchableOpacity>
-                <Text style={styles.logoHint}>JPEG / PNG · Max 2MB</Text>
+                <Text style={styles.logoHint}>{t('shopSetup.logoHint')}</Text>
 
                 <View style={styles.divider} />
 
                 <View style={styles.reviewSection}>
-                  <Text style={styles.reviewTitle}>Summary</Text>
+                  <Text style={styles.reviewTitle}>{t('shopSetup.summary')}</Text>
                   <View style={styles.reviewItem}>
-                    <Text style={styles.reviewLabel}>Shop</Text>
+                    <Text style={styles.reviewLabel}>{t('shopSetup.shop')}</Text>
                     <Text style={styles.reviewValue}>{shopName || '—'}</Text>
                   </View>
                   <View style={styles.reviewItem}>
-                    <Text style={styles.reviewLabel}>Owner</Text>
+                    <Text style={styles.reviewLabel}>{t('shopSetup.owner')}</Text>
                     <Text style={styles.reviewValue}>{ownerName || '—'}</Text>
                   </View>
                   <View style={styles.reviewItem}>
-                    <Text style={styles.reviewLabel}>City</Text>
+                    <Text style={styles.reviewLabel}>{t('shopSetup.city')}</Text>
                     <Text style={styles.reviewValue}>{city || '—'}</Text>
                   </View>
                 </View>
@@ -315,12 +317,12 @@ export default function ShopSetupScreen() {
             {step > 0 && (
               <TouchableOpacity style={styles.backButton} onPress={prevStep} activeOpacity={0.7}>
                 <Ionicons name="arrow-back" size={20} color={Tokens['on-surface-variant']} />
-                <Text style={styles.backText}>Back</Text>
+                <Text style={styles.backText}>{t('common.back')}</Text>
               </TouchableOpacity>
             )}
             {step < STEPS.length - 1 ? (
               <TouchableOpacity style={styles.nextButton} onPress={nextStep} activeOpacity={0.9}>
-                <Text style={styles.nextText}>Continue</Text>
+                <Text style={styles.nextText}>{t('common.continue')}</Text>
                 <Ionicons name="arrow-forward" size={18} color="#fff" />
               </TouchableOpacity>
             ) : (
@@ -335,7 +337,7 @@ export default function ShopSetupScreen() {
                 ) : (
                   <>
                     <Ionicons name="checkmark-circle" size={18} color="#fff" />
-                    <Text style={styles.nextText}>Finish Setup</Text>
+                    <Text style={styles.nextText}>{t('shopSetup.finishSetup')}</Text>
                   </>
                 )}
               </TouchableOpacity>

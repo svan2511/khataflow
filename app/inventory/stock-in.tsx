@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { View, Text, TouchableOpacity, ScrollView, TextInput, StyleSheet, Alert, ActivityIndicator, KeyboardAvoidingView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -18,6 +19,7 @@ export default function StockInScreen() {
   const [quantity, setQuantity] = useState('');
   const [purchasePrice, setPurchasePrice] = useState('');
   const [saving, setSaving] = useState(false);
+  const { t } = useTranslation();
 
   const searchProducts = useCallback(async (q: string) => {
     if (!token || q.length < 2) {
@@ -43,11 +45,11 @@ export default function StockInScreen() {
 
   const handleStockIn = async () => {
     if (!token || !selectedProduct) {
-      Alert.alert('Error', 'Please select a product first.');
+      Alert.alert(t('common.error'), t('inventory.selectProductFirst'));
       return;
     }
     if (!quantity || Number(quantity) <= 0) {
-      Alert.alert('Validation', 'Please enter a valid quantity.');
+      Alert.alert(t('common.validation'), t('inventory.validQuantity'));
       return;
     }
 
@@ -58,11 +60,11 @@ export default function StockInScreen() {
         quantity: Number(quantity),
         cost_price: purchasePrice ? Number(purchasePrice) : undefined,
       });
-      Alert.alert('Success', 'Stock updated successfully.', [
-        { text: 'OK', onPress: () => router.back() }
+      Alert.alert(t('common.success'), t('inventory.stockInSuccess'), [
+        { text: t('common.ok'), onPress: () => router.back() }
       ]);
     } catch (e: any) {
-      Alert.alert('Error', e.message || 'Failed to update stock');
+      Alert.alert(t('common.error'), e.message || t('inventory.stockInFailed'));
     } finally {
       setSaving(false);
     }
@@ -79,7 +81,7 @@ export default function StockInScreen() {
           <TouchableOpacity style={styles.topBtn} onPress={() => setSidebarOpen(true)}>
             <Ionicons name="menu" size={22} color={Tokens.secondary} />
           </TouchableOpacity>
-          <Text style={styles.topTitle}>Record Stock Purchase</Text>
+          <Text style={styles.topTitle}>{t('inventory.stockIn')}</Text>
         </View>
       </View>
 
@@ -95,12 +97,12 @@ export default function StockInScreen() {
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Search Product</Text>
+          <Text style={styles.cardTitle}>{t('inventory.searchProduct')}</Text>
           <View style={styles.searchBar}>
             <Ionicons name="search" size={20} color={Tokens.outline} />
             <TextInput
               style={styles.searchInput}
-              placeholder="Scan barcode or enter product name..."
+              placeholder={t('inventory.searchPlaceholder')}
               placeholderTextColor={Tokens.outline}
               value={search}
               onChangeText={(text) => { setSearch(text); searchProducts(text); }}
@@ -117,7 +119,7 @@ export default function StockInScreen() {
                   <View style={{ flex: 1 }}>
                     <Text style={styles.dropdownName}>{p.name}</Text>
                     <Text style={styles.dropdownDetail}>
-                      Stock: {Number(p.stock_quantity)} {p.unit} | Price: ₹{Number(p.price)}
+                      {t('inventory.stockLabel')}: {Number(p.stock_quantity)} {p.unit} | {t('inventory.priceLabel')}: ₹{Number(p.price)}
                     </Text>
                   </View>
                   <Ionicons name="add-circle" size={24} color={Tokens.secondary} />
@@ -138,8 +140,8 @@ export default function StockInScreen() {
                   <View style={{ flex: 1 }}>
                     <Text style={styles.selectedName}>{selectedProduct.name}</Text>
                     <Text style={styles.selectedSku}>
-                      {selectedProduct.sku ? `SKU: ${selectedProduct.sku} • ` : ''}
-                      Current Stock: {Number(selectedProduct.stock_quantity)} {selectedProduct.unit}
+                      {selectedProduct.sku ? `${t('inventory.skuLabel')}: ${selectedProduct.sku} • ` : ''}
+                      {t('inventory.currentStock')}: {Number(selectedProduct.stock_quantity)} {selectedProduct.unit}
                     </Text>
                   </View>
                 </View>
@@ -152,7 +154,7 @@ export default function StockInScreen() {
 
               <View style={styles.fieldsRow}>
                 <View style={styles.fieldHalf}>
-                  <Text style={styles.fieldLabel}>Quantity Added</Text>
+                  <Text style={styles.fieldLabel}>{t('inventory.quantityToAdd')}</Text>
                   <View style={styles.fieldInputWrap}>
                     <Ionicons name="add-circle-outline" size={18} color={Tokens.outline} style={styles.fieldIcon} />
                     <TextInput
@@ -166,7 +168,7 @@ export default function StockInScreen() {
                   </View>
                 </View>
                 <View style={styles.fieldHalf}>
-                  <Text style={styles.fieldLabel}>Purchase Price (Per Unit)</Text>
+                  <Text style={styles.fieldLabel}>{t('inventory.purchasePricePerUnit')}</Text>
                   <View style={styles.fieldInputWrap}>
                     <Ionicons name="cash-outline" size={18} color={Tokens.outline} style={styles.fieldIcon} />
                     <TextInput
@@ -183,20 +185,20 @@ export default function StockInScreen() {
             </View>
 
             <View style={styles.summaryCard}>
-              <Text style={styles.summaryTitle}>Purchase Summary</Text>
+              <Text style={styles.summaryTitle}>{t('inventory.purchaseSummary')}</Text>
               <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Units Added</Text>
+                <Text style={styles.summaryLabel}>{t('inventory.unitsAdded')}</Text>
                 <Text style={styles.summaryValue}>{quantity || '0'}</Text>
               </View>
               <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Cost per Unit</Text>
+                <Text style={styles.summaryLabel}>{t('inventory.costPerUnit')}</Text>
                 <Text style={styles.summaryValue}>₹{Number(purchasePrice || 0).toFixed(2)}</Text>
               </View>
               <View style={styles.summaryDivider} />
               <View style={styles.summaryTotal}>
-                <Text style={styles.totalLabel}>Total Stock Value</Text>
+                <Text style={styles.totalLabel}>{t('inventory.newStockTotal')}</Text>
                 <Text style={styles.totalAmount}>
-                  ₹{totalValue.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  ₹{Number.isInteger(totalValue) ? totalValue.toLocaleString('en-IN') : totalValue.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </Text>
               </View>
             </View>
@@ -207,7 +209,7 @@ export default function StockInScreen() {
               ) : (
                 <>
                   <Ionicons name="cube-outline" size={20} color={Tokens['on-primary']} />
-                  <Text style={styles.updateBtnText}>Update Inventory</Text>
+                  <Text style={styles.updateBtnText}>{t('inventory.stockInBtn')}</Text>
                 </>
               )}
             </TouchableOpacity>

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { View, Text, Image, TouchableOpacity, ScrollView, StyleSheet, ActivityIndicator, RefreshControl, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -13,6 +14,8 @@ import { useAuth } from '@/lib/auth-context';
 import { api, DailyReport, MonthlyReport, CustomRangeReport } from '@/lib/api';
 
 const displayUnit = (unit?: string) => unit || 'pcs';
+
+const fmt = (n: number) => Number.isInteger(n) ? n.toLocaleString('en-IN') : n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 export default function ReportsScreen() {
   const { token } = useAuth();
@@ -31,6 +34,7 @@ export default function ReportsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [exporting, setExporting] = useState(false);
   const exportingRef = useRef(false);
+  const { t } = useTranslation();
   const [shopName, setShopName] = useState('');
   const [shopLogo, setShopLogo] = useState('');
   const [shopAddress, setShopAddress] = useState('');
@@ -146,7 +150,7 @@ export default function ReportsScreen() {
           <td style="text-align:center;padding:12px 14px;border-bottom:1px solid #f3f4f6;color:#6b7280;font-size:13px;width:40px">${i + 1}</td>
           <td style="padding:12px 14px;border-bottom:1px solid #f3f4f6;color:#111827;font-size:14px;font-weight:600">${p.product_name}</td>
           <td style="text-align:center;padding:12px 14px;border-bottom:1px solid #f3f4f6;color:#6b7280;font-size:13px">${Number(p.total_quantity)} ${displayUnit(p.unit)}</td>
-          <td style="text-align:right;padding:12px 14px;border-bottom:1px solid #f3f4f6;color:#111827;font-size:14px;font-weight:700">₹${Number(p.total_revenue).toLocaleString('en-IN')}</td>
+           <td style="text-align:right;padding:12px 14px;border-bottom:1px solid #f3f4f6;color:#111827;font-size:14px;font-weight:700">₹${fmt(Number(p.total_revenue))}</td>
         </tr>`
       ).join('') : '<tr><td colspan="4" style="text-align:center;padding:28px;color:#9ca3af;font-size:14px">No product data for this period</td></tr>';
 
@@ -223,7 +227,7 @@ tbody tr:last-child td{border-bottom:none}
   <div class="summary">
     <div class="summary-item">
       <h4>Total Sales</h4>
-      <div class="value">₹${Number(totalSales).toLocaleString('en-IN')}</div>
+      <div class="value">₹${fmt(Number(totalSales))}</div>
     </div>
     <div class="summary-item">
       <h4>Total Bills</h4>
@@ -231,7 +235,7 @@ tbody tr:last-child td{border-bottom:none}
     </div>
     <div class="summary-item">
       <h4>Total Credit</h4>
-      <div class="value credit">₹${Number(totalCredit).toLocaleString('en-IN')}</div>
+      <div class="value credit">₹${fmt(Number(totalCredit))}</div>
     </div>
   </div>
   <div class="section">
@@ -242,7 +246,7 @@ tbody tr:last-child td{border-bottom:none}
         const colors: Record<string, string> = { cash: '#2e7d32', upi: '#1565c0', card: '#7c3aed', credit: '#d97706' };
         return `<div class="pay-item">
           <div class="left"><span class="pay-dot" style="background:${colors[m]}"></span><span class="name">${m.charAt(0).toUpperCase() + m.slice(1)}</span></div>
-          <span class="amt">₹${amount.toLocaleString('en-IN')}</span>
+          <span class="amt">₹${fmt(amount)}</span>
         </div>`;
       }).join('')}
     </div>
@@ -279,7 +283,7 @@ tbody tr:last-child td{border-bottom:none}
           <TouchableOpacity style={styles.iconBtn} onPress={() => router.back()}>
             <Ionicons name="arrow-back" size={22} color={Tokens.secondary} />
           </TouchableOpacity>
-          <Text style={styles.topTitle}>Reports</Text>
+          <Text style={styles.topTitle}>{t('reports.title')}</Text>
           <View style={{ width: 40 }} />
         </View>
         <ActivityIndicator size="large" color={Tokens.secondary} style={{ marginTop: 60 }} />
@@ -293,7 +297,7 @@ tbody tr:last-child td{border-bottom:none}
         <TouchableOpacity style={styles.iconBtn} onPress={() => router.back()}>
           <Ionicons name="arrow-back" size={22} color={Tokens.secondary} />
         </TouchableOpacity>
-        <Text style={styles.topTitle}>Reports</Text>
+        <Text style={styles.topTitle}>{t('reports.title')}</Text>
         <View style={{ flexDirection: 'row', gap: 4 }}>
           <TouchableOpacity style={styles.iconBtn} onPress={handleExportPDF} disabled={exporting}>
             <Ionicons name={exporting ? 'hourglass' : 'download-outline'} size={22} color={Tokens['on-surface-variant']} />
@@ -317,33 +321,33 @@ tbody tr:last-child td{border-bottom:none}
             onPress={() => setPeriod('daily')}
           >
             <Ionicons name="sunny-outline" size={16} color={period === 'daily' ? '#fff' : Tokens['on-surface-variant']} />
-            <Text style={[styles.toggleText, period === 'daily' && styles.toggleTextActive]}>Daily</Text>
+            <Text style={[styles.toggleText, period === 'daily' && styles.toggleTextActive]}>{t('reports.today')}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.toggleBtn, period === 'monthly' && styles.toggleBtnActive]}
             onPress={() => setPeriod('monthly')}
           >
             <Ionicons name="calendar-outline" size={16} color={period === 'monthly' ? '#fff' : Tokens['on-surface-variant']} />
-            <Text style={[styles.toggleText, period === 'monthly' && styles.toggleTextActive]}>Monthly</Text>
+            <Text style={[styles.toggleText, period === 'monthly' && styles.toggleTextActive]}>{t('reports.thisMonth')}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.toggleBtn, period === 'custom' && styles.toggleBtnActive]}
             onPress={() => setPeriod('custom')}
           >
             <Ionicons name="options-outline" size={16} color={period === 'custom' ? '#fff' : Tokens['on-surface-variant']} />
-            <Text style={[styles.toggleText, period === 'custom' && styles.toggleTextActive]}>Custom</Text>
+            <Text style={[styles.toggleText, period === 'custom' && styles.toggleTextActive]}>{t('reports.custom')}</Text>
           </TouchableOpacity>
         </View>
 
         {period === 'custom' && (
           <View style={styles.dateRangeRow}>
             <TouchableOpacity style={styles.dateField} onPress={() => setShowStartPicker(true)}>
-              <Text style={styles.dateLabel}>From</Text>
+              <Text style={styles.dateLabel}>{t('reports.from')}</Text>
               <Text style={styles.dateValue}>{customStartDisplay.toLocaleDateString('en-IN')}</Text>
             </TouchableOpacity>
             <Text style={styles.dateSep}>→</Text>
             <TouchableOpacity style={styles.dateField} onPress={() => setShowEndPicker(true)}>
-              <Text style={styles.dateLabel}>To</Text>
+              <Text style={styles.dateLabel}>{t('reports.to')}</Text>
               <Text style={styles.dateValue}>{customEndDisplay.toLocaleDateString('en-IN')}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.dateApply} onPress={() => { setCustomFetchKey(k => k + 1); }}>
@@ -389,7 +393,7 @@ tbody tr:last-child td{border-bottom:none}
         {/* Sales Card */}
         <View style={styles.salesCard}>
           <View style={styles.salesCardTop}>
-            <Text style={styles.salesLabel}>Total Sales</Text>
+            <Text style={styles.salesLabel}>{t('reports.totalSales')}</Text>
             {growth !== undefined && (
               <View style={[styles.growthBadge, growth >= 0 ? styles.growthPositive : styles.growthNegative]}>
                 <Ionicons name={growth >= 0 ? 'trending-up' : 'trending-down'} size={12} color={growth >= 0 ? '#16a34a' : '#dc2626'} />
@@ -399,11 +403,11 @@ tbody tr:last-child td{border-bottom:none}
               </View>
             )}
           </View>
-          <Text style={styles.salesAmount}>₹{Number(totalSales).toLocaleString('en-IN')}</Text>
+          <Text style={styles.salesAmount}>₹{fmt(Number(totalSales))}</Text>
           <View style={styles.salesFooter}>
             <View style={styles.salesBadge}>
               <Ionicons name="receipt-outline" size={14} color={Tokens['on-secondary']} />
-              <Text style={styles.salesBadgeText}>{totalBills} bills</Text>
+              <Text style={styles.salesBadgeText}>{totalBills} {t('reports.totalBills')}</Text>
             </View>
           </View>
         </View>
@@ -415,21 +419,21 @@ tbody tr:last-child td{border-bottom:none}
               <Ionicons name="receipt" size={20} color="#2e7d32" />
             </View>
             <Text style={styles.statValue}>{totalBills}</Text>
-            <Text style={styles.statLabel}>Bills</Text>
+            <Text style={styles.statLabel}>{t('reports.totalBills')}</Text>
           </View>
           <View style={styles.statCard}>
             <View style={[styles.statIcon, { backgroundColor: '#e3f2fd' }]}>
               <Ionicons name="cash-outline" size={20} color="#1565c0" />
             </View>
-            <Text style={styles.statValue}>₹{Number(totalSales).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</Text>
-            <Text style={styles.statLabel}>Revenue</Text>
+            <Text style={styles.statValue}>₹{fmt(Number(totalSales))}</Text>
+            <Text style={styles.statLabel}>{t('reports.grossSales')}</Text>
           </View>
           <View style={styles.statCard}>
             <View style={[styles.statIcon, { backgroundColor: '#fef3c7' }]}>
               <Ionicons name="wallet-outline" size={20} color="#d97706" />
             </View>
-            <Text style={styles.statValue}>₹{Number(totalCredit).toLocaleString('en-IN')}</Text>
-            <Text style={styles.statLabel}>Credit</Text>
+            <Text style={styles.statValue}>₹{fmt(Number(totalCredit))}</Text>
+            <Text style={styles.statLabel}>{t('reports.totalCredit')}</Text>
           </View>
         </View>
 
@@ -438,7 +442,7 @@ tbody tr:last-child td{border-bottom:none}
           <View style={styles.card}>
             <View style={styles.cardHeader}>
               <Ionicons name="wallet-outline" size={18} color={Tokens.secondary} />
-              <Text style={styles.cardTitle}>Payment Breakdown</Text>
+              <Text style={styles.cardTitle}>{t('reports.paymentBreakdown')}</Text>
             </View>
             <View style={styles.breakdownList}>
               {(['cash', 'upi', 'card', 'credit'] as const).map(method => {
@@ -455,7 +459,7 @@ tbody tr:last-child td{border-bottom:none}
                     <View style={styles.breakdownBarBg}>
                       <View style={[styles.breakdownBar, { width: `${pct}%`, backgroundColor: colors[method] }]} />
                     </View>
-                    <Text style={styles.breakdownAmount}>₹{amount.toLocaleString('en-IN')}</Text>
+                    <Text style={styles.breakdownAmount}>₹{fmt(amount)}</Text>
                     <Text style={styles.breakdownPct}>{pct.toFixed(0)}%</Text>
                   </View>
                 );
@@ -469,7 +473,7 @@ tbody tr:last-child td{border-bottom:none}
           <View style={styles.card}>
             <View style={styles.cardHeader}>
               <Ionicons name="basket-outline" size={18} color={Tokens.secondary} />
-              <Text style={styles.cardTitle}>Top Items</Text>
+              <Text style={styles.cardTitle}>{t('reports.topProducts')}</Text>
             </View>
             {topProducts.map((item, i) => (
               <View key={i} style={styles.topItem}>
@@ -479,10 +483,10 @@ tbody tr:last-child td{border-bottom:none}
                 <View style={{ flex: 1, minWidth: 0 }}>
                   <Text style={styles.topItemName} numberOfLines={1}>{item.product_name}</Text>
                   <Text style={styles.topItemUnits}>
-                    {Number(item.total_quantity)} {displayUnit(item.unit)} sold
+                    {Number(item.total_quantity)} {displayUnit(item.unit)} {t('reports.sold')}
                   </Text>
                 </View>
-                <Text style={styles.topItemRevenue}>₹{Number(item.total_revenue).toLocaleString('en-IN')}</Text>
+                <Text style={styles.topItemRevenue}>₹{fmt(Number(item.total_revenue))}</Text>
               </View>
             ))}
           </View>
@@ -491,8 +495,8 @@ tbody tr:last-child td{border-bottom:none}
             <View style={styles.emptyIconWrap}>
               <Ionicons name="bar-chart-outline" size={36} color="#d1d5db" />
             </View>
-            <Text style={styles.emptyTitle}>No data for this period</Text>
-            <Text style={styles.emptySub}>Start billing to see reports here.</Text>
+            <Text style={styles.emptyTitle}>{t('reports.noData')}</Text>
+            <Text style={styles.emptySub}>{t('reports.noDataSub')}</Text>
           </View>
         )}
 

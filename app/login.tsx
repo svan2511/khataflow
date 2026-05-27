@@ -7,6 +7,7 @@ import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth-context';
 import { useToast } from '@/components/toast-provider';
 import Loader from '@/components/Loader';
+import { useTranslation } from 'react-i18next';
 
 const OTP_TIMER = 30;
 
@@ -21,6 +22,7 @@ export default function LoginScreen() {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const { token, user, signIn } = useAuth();
   const { showToast } = useToast();
+  const { t } = useTranslation();
 
   useEffect(() => {
     if (token && user) {
@@ -66,7 +68,7 @@ export default function LoginScreen() {
       await api.register(mobile);
       setStep('otp');
     } catch (err: any) {
-      showToast({ type: 'error', title: 'Failed to send OTP', message: err.message });
+      showToast({ type: 'error', title: t('auth.failedToSendOtp'), message: err.message });
     } finally {
       setLoading(false);
     }
@@ -79,7 +81,7 @@ export default function LoginScreen() {
       await api.register(mobile);
       startTimer();
     } catch (err: any) {
-      showToast({ type: 'error', title: 'Failed to resend OTP', message: err.message });
+      showToast({ type: 'error', title: t('auth.failedToResendOtp'), message: err.message });
     } finally {
       setLoading(false);
     }
@@ -109,7 +111,7 @@ export default function LoginScreen() {
     try {
       await signIn(mobile, otpString);
     } catch (err: any) {
-      showToast({ type: 'error', title: 'OTP verification failed', message: err.message });
+      showToast({ type: 'error', title: t('auth.otpFailed'), message: t('auth.invalidOrExpiredOtp') });
       setOtp(['', '', '', '']);
       otpRefs.current[0]?.focus();
     } finally {
@@ -136,9 +138,9 @@ export default function LoginScreen() {
                 <Ionicons name="lock-closed" size={28} color={Tokens.secondary} />
               </View>
             </View>
-            <Text style={styles.title}>Verify OTP</Text>
+            <Text style={styles.title}>{t('auth.verifyOtp')}</Text>
             <Text style={styles.description}>
-               Enter the 4-digit code sent to{' '}
+              {t('auth.enterCodeSentTo')}{' '}
               <Text style={styles.phoneHighlight}>+91 {mobile}</Text>
             </Text>
           </View>
@@ -174,7 +176,7 @@ export default function LoginScreen() {
                 <Loader size={20} color="#fff" />
               ) : (
                 <>
-                  <Text style={styles.verifyButtonText}>Verify & Continue</Text>
+                  <Text style={styles.verifyButtonText}>{t('auth.verifyAndContinue')}</Text>
                   <Ionicons name="arrow-forward" size={20} color="#fff" />
                 </>
               )}
@@ -185,9 +187,9 @@ export default function LoginScreen() {
             {timer > 0 ? (
               <View style={styles.resendRow}>
                 <Ionicons name="time-outline" size={16} color={Tokens['on-surface-variant']} />
-                <Text style={styles.resendTimer}>
-                  Resend in <Text style={styles.resendTimerBold}>{timer}s</Text>
-                </Text>
+                  <Text style={styles.resendTimer}>
+                    {t('auth.resendIn')} <Text style={styles.resendTimerBold}>{timer}s</Text>
+                  </Text>
               </View>
             ) : (
               <TouchableOpacity onPress={handleResendOtp} disabled={loading} style={styles.resendBtn}>
@@ -196,7 +198,7 @@ export default function LoginScreen() {
                 ) : (
                   <>
                     <Ionicons name="refresh" size={16} color={Tokens.secondary} />
-                    <Text style={styles.resendText}>Resend OTP</Text>
+                    <Text style={styles.resendText}>{t('auth.resendOtp')}</Text>
                   </>
                 )}
               </TouchableOpacity>
@@ -223,14 +225,14 @@ export default function LoginScreen() {
               <Ionicons name="phone-portrait-outline" size={28} color={Tokens.secondary} />
             </View>
           </View>
-          <Text style={styles.title}>Welcome back</Text>
+          <Text style={styles.title}>{t('auth.welcomeBack')}</Text>
           <Text style={styles.description}>
-            Enter your mobile number to access your store.
+            {t('auth.enterMobile')}
           </Text>
         </View>
 
         <View style={styles.form}>
-          <Text style={styles.label}>Mobile Number</Text>
+          <Text style={styles.label}>{t('auth.mobileNumber')}</Text>
           <View style={[styles.inputContainer, mobile.length > 0 && styles.inputContainerFocused]}>
             <View style={styles.countryCode}>
               <Ionicons name="call-outline" size={16} color={Tokens.secondary} />
@@ -239,7 +241,7 @@ export default function LoginScreen() {
             </View>
             <TextInput
               style={styles.input}
-              placeholder="Enter 10-digit number"
+              placeholder={t('auth.enter10DigitNumber')}
               placeholderTextColor={Tokens.outline}
               keyboardType="phone-pad"
               maxLength={10}
@@ -262,7 +264,7 @@ export default function LoginScreen() {
               <Loader size={20} color="#fff" />
             ) : (
               <>
-                <Text style={styles.verifyButtonText}>Get OTP</Text>
+                <Text style={styles.verifyButtonText}>{t('auth.getOtp')}</Text>
                 <Ionicons name="arrow-forward" size={20} color="#fff" />
               </>
             )}
@@ -271,8 +273,8 @@ export default function LoginScreen() {
 
         <View style={styles.supportSection}>
           <Text style={styles.supportText}>
-            Need help?{' '}
-            <Text style={styles.supportLink}>Contact Support</Text>
+            {t('auth.needHelp')}{' '}
+            <Text style={styles.supportLink}>{t('auth.contactSupport')}</Text>
           </Text>
         </View>
       </View>

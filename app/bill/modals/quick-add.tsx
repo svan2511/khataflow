@@ -4,6 +4,7 @@ import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Tokens, Typography, Spacing, BorderRadius } from '@/constants/theme';
 import { useBill } from '@/lib/bill-context';
+import { useTranslation } from 'react-i18next';
 
 export default function QuickAddModal() {
   const [name, setName] = useState('');
@@ -11,6 +12,7 @@ export default function QuickAddModal() {
   const [quantity, setQuantity] = useState('1');
   const [selectedUnit, setSelectedUnit] = useState('piece');
   const { addItem } = useBill();
+  const { t } = useTranslation();
 
   const units = ['Piece', 'Kilogram', 'Liter', 'Gram'];
 
@@ -40,7 +42,7 @@ export default function QuickAddModal() {
         <View style={styles.sheet}>
           <View style={styles.handle} />
           <View style={styles.header}>
-            <Text style={styles.title}>Quick Add Item</Text>
+            <Text style={styles.title}>{t('bill.newProduct')}</Text>
             <TouchableOpacity onPress={() => router.back()} style={styles.closeBtn}>
               <Ionicons name="close" size={24} color={Tokens['on-surface-variant']} />
             </TouchableOpacity>
@@ -49,10 +51,10 @@ export default function QuickAddModal() {
           <ScrollView style={styles.formScroll} contentContainerStyle={styles.formScrollContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           <View style={styles.form}>
             <View>
-              <Text style={styles.label}>Product Name</Text>
+              <Text style={styles.label}>{t('bill.productName')}</Text>
               <TextInput
                 style={styles.input}
-                placeholder="e.g., Tata Salt"
+                placeholder={t('bill.productNamePlaceholder')}
                 placeholderTextColor={Tokens['on-surface-variant']}
                 value={name}
                 onChangeText={setName}
@@ -61,7 +63,7 @@ export default function QuickAddModal() {
 
             <View style={styles.row}>
               <View style={{ flex: 1 }}>
-                <Text style={styles.label}>Rate (₹)</Text>
+                <Text style={styles.label}>{t('bill.sellingPrice')}</Text>
                 <TextInput
                   style={styles.input}
                   placeholder="0"
@@ -72,7 +74,7 @@ export default function QuickAddModal() {
                 />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.label}>Quantity</Text>
+                <Text style={styles.label}>{t('common.quantity')}</Text>
                 <TextInput
                   style={styles.input}
                   placeholder="1"
@@ -91,7 +93,7 @@ export default function QuickAddModal() {
             </View>
 
             <View>
-              <Text style={styles.label}>Unit</Text>
+              <Text style={styles.label}>{t('bill.unit')}</Text>
               <View style={styles.unitRow}>
                 {units.map(u => (
                   <TouchableOpacity
@@ -99,7 +101,7 @@ export default function QuickAddModal() {
                     style={[styles.unitChip, selectedUnit === u && styles.unitChipActive]}
                     onPress={() => setSelectedUnit(u)}
                   >
-                    <Text style={[styles.unitText, selectedUnit === u && styles.unitTextActive]}>{u}</Text>
+                    <Text style={[styles.unitText, selectedUnit === u && styles.unitTextActive]}>{t('units.' + u.toLowerCase())}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
@@ -107,7 +109,7 @@ export default function QuickAddModal() {
 
             <TouchableOpacity style={styles.addBtn} onPress={handleAdd} activeOpacity={0.9}>
               <Ionicons name="cart" size={22} color={Tokens['on-primary']} />
-              <Text style={styles.addBtnText}>Add to Bill</Text>
+              <Text style={styles.addBtnText}>{t('bill.addToBill')}</Text>
             </TouchableOpacity>
           </View>
           </ScrollView>

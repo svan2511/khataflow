@@ -10,18 +10,21 @@ import { useAuth } from '@/lib/auth-context';
 import FullScreenLoader from '@/components/FullScreenLoader';
 import Loader from '@/components/Loader';
 import { shareInvoicePdf, shareOnWhatsApp } from '@/lib/bill-pdf';
+import { useTranslation } from 'react-i18next';
 
-function formatPaymentMethod(method: string): string {
+const fmt = (n: number) => Number.isInteger(n) ? n.toLocaleString('en-IN') : n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+function formatPaymentMethod(t: any, method: string): string {
   const map: Record<string, string> = {
-    cash: 'Cash', upi: 'UPI', card: 'Card',
-    credit: 'Credit (Udhaar)', mix: 'Split Payment',
+    cash: t('paymentMethods.cash'), upi: t('paymentMethods.upi'), card: t('paymentMethods.card'),
+    credit: t('paymentMethods.credit'), mix: t('paymentMethods.mix'),
   };
   return map[method] || method;
 }
 
-function formatStatus(status: string): string {
+function formatStatus(t: any, status: string): string {
   const map: Record<string, string> = {
-    paid: 'Paid', partial: 'Partial', pending: 'Pending', cancelled: 'Cancelled',
+    paid: t('bill.statusPaid'), partial: t('bill.statusPartial'), pending: t('bill.statusPending'), cancelled: t('bill.statusCancelled'),
   };
   return map[status] || status;
 }
@@ -32,6 +35,7 @@ const pmtIcons: Record<string, string> = {
 };
 
 export default function BillDetailScreen() {
+  const { t } = useTranslation();
   const { uuid } = useLocalSearchParams<{ uuid: string }>();
   const { token } = useAuth();
   const [bill, setBill] = useState<BillDetail | null>(null);
@@ -103,17 +107,8 @@ export default function BillDetailScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.safe} edges={['top']}>
-        <View style={styles.topBar}>
-          <TouchableOpacity style={styles.iconBtn} onPress={() => router.back()}>
-            <Ionicons name="arrow-back" size={22} color={Tokens['on-surface-variant']} />
-          </TouchableOpacity>
-          <Text style={styles.topTitle}>Bill Detail</Text>
-          <View style={{ width: 40 }} />
-        </View>
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-          <FullScreenLoader />
-        </View>
+      <SafeAreaView style={{ flex: 1, backgroundColor: Tokens.background, alignItems: 'center', justifyContent: 'center' }} edges={['top']}>
+        <Loader size={48} />
       </SafeAreaView>
     );
   }
@@ -125,11 +120,11 @@ export default function BillDetailScreen() {
           <TouchableOpacity style={styles.iconBtn} onPress={() => router.back()}>
             <Ionicons name="arrow-back" size={22} color={Tokens['on-surface-variant']} />
           </TouchableOpacity>
-          <Text style={styles.topTitle}>Bill Detail</Text>
+          <Text style={styles.topTitle}>{t('bill.billDetail')}</Text>
           <View style={{ width: 40 }} />
         </View>
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-          <Text style={{ color: Tokens['on-surface-variant'] }}>Bill not found</Text>
+          <Text style={{ color: Tokens['on-surface-variant'] }}>{t('bill.billNotFound')}</Text>
         </View>
       </SafeAreaView>
     );
@@ -138,7 +133,7 @@ export default function BillDetailScreen() {
   const isPaid = bill.payment_status === 'paid';
   const statusColor = isPaid ? Tokens.secondary : Tokens.tertiary;
   const statusBg = isPaid ? Tokens['secondary-fixed'] : Tokens['tertiary-fixed'];
-  const statusText = formatStatus(bill.payment_status);
+  const statusText = formatStatus(t, bill.payment_status);
 
   const billDate = new Date(bill.created_at);
   const dateStr = billDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
@@ -150,7 +145,7 @@ export default function BillDetailScreen() {
         <TouchableOpacity style={styles.iconBtn} onPress={() => router.back()}>
           <Ionicons name="arrow-back" size={22} color={Tokens['on-surface-variant']} />
         </TouchableOpacity>
-        <Text style={styles.topTitle}>Bill {bill.bill_number}</Text>
+        <Text style={styles.topTitle}>{`${t('common.bill')} ${bill.bill_number}`}</Text>
         <TouchableOpacity style={styles.iconBtn}>
           <Ionicons name="ellipsis-vertical" size={20} color={Tokens['on-surface-variant']} />
         </TouchableOpacity>
@@ -179,9 +174,9 @@ export default function BillDetailScreen() {
           <View style={styles.heroDivider} />
           <View style={styles.heroMeta}>
             {[
-              { icon: 'receipt-outline', label: 'Bill No.', value: bill.bill_number },
-              { icon: 'calendar-outline', label: 'Date', value: dateStr },
-              { icon: 'time-outline', label: 'Time', value: timeStr },
+              { icon: 'receipt-outline', label: t('bill.billNumber'), value: bill.bill_number },
+              { icon: 'calendar-outline', label: t('common.date'), value: dateStr },
+              { icon: 'time-outline', label: t('common.time'), value: timeStr },
             ].map((item, i) => (
               <View key={i} style={styles.heroMetaItem}>
                 <Ionicons name={item.icon as any} size={16} color="rgba(255,255,255,0.7)" />
@@ -201,7 +196,7 @@ export default function BillDetailScreen() {
             </View>
             <View style={{ flex: 1 }}>
               <View style={styles.customerNameRow}>
-                <Text style={styles.value}>{bill.customer?.name || 'Walk-in Customer'}</Text>
+                <Text style={styles.value}>{bill.customer?.name || t('bill.walkInCustomer')}</Text>
                 {bill.customer?.phone ? (
                   <View style={styles.phoneInline}>
                     <Ionicons name="call-outline" size={12} color="#006b59" />
@@ -215,62 +210,62 @@ export default function BillDetailScreen() {
 
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>
-            Items <Text style={{ color: Tokens['on-surface-variant'], fontWeight: '400' }}>({bill.items.length})</Text>
+            {t('bill.items')} <Text style={{ color: Tokens['on-surface-variant'], fontWeight: '400' }}>({bill.items.length})</Text>
           </Text>
           {bill.items.map((item, i) => (
             <View key={item.id || i} style={[styles.itemRow, i < bill.items.length - 1 && styles.itemBorder]}>
               <View style={styles.itemDot} />
               <View style={{ flex: 1, minWidth: 0 }}>
                 <Text style={styles.itemName}>{item.product_name}</Text>
-                <Text style={styles.itemQty}>{item.quantity} × ₹{item.unit_price}</Text>
+                <Text style={styles.itemQty}>{item.quantity} × ₹{fmt(item.unit_price)}</Text>
               </View>
-              <Text style={styles.itemTotal}>₹{item.total}</Text>
+              <Text style={styles.itemTotal}>₹{fmt(item.total)}</Text>
             </View>
           ))}
         </View>
 
         <View style={styles.card}>
           <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Subtotal</Text>
-            <Text style={styles.summaryValue}>₹{bill.subtotal}</Text>
+            <Text style={styles.summaryLabel}>{t('bill.subtotal')}</Text>
+            <Text style={styles.summaryValue}>₹{fmt(bill.subtotal)}</Text>
           </View>
           {bill.discount > 0 && (
             <View style={styles.summaryRow}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Text style={styles.summaryLabel}>Discount</Text>
+                <Text style={styles.summaryLabel}>{t('bill.discount')}</Text>
                 <View style={styles.discountBadge}>
                   <Text style={styles.discountText}>
-                    {bill.discount_type === 'percentage' ? `${bill.discount_value}% OFF` : `₹${bill.discount_value} OFF`}
+                    {bill.discount_type === 'percentage' ? `${bill.discount_value}% OFF` : `₹${fmt(bill.discount_value)} OFF`}
                   </Text>
                 </View>
               </View>
-              <Text style={[styles.summaryValue, { color: Tokens.secondary }]}>−₹{bill.discount}</Text>
+              <Text style={[styles.summaryValue, { color: Tokens.secondary }]}>−₹{fmt(bill.discount)}</Text>
             </View>
           )}
           <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>GST</Text>
-            <Text style={styles.summaryValue}>₹{bill.tax}</Text>
+            <Text style={styles.summaryLabel}>{t('bill.gst')}</Text>
+            <Text style={styles.summaryValue}>₹{fmt(bill.tax)}</Text>
           </View>
           <View style={styles.totalRow}>
-            <Text style={styles.totalLabel}>Total Amount</Text>
-            <Text style={styles.totalValue}>₹{bill.total}</Text>
+            <Text style={styles.totalLabel}>{t('bill.totalAmount')}</Text>
+            <Text style={styles.totalValue}>₹{fmt(bill.total)}</Text>
           </View>
           <View style={styles.summaryRow}>
-            <Text style={[styles.summaryLabel, { color: Tokens.secondary }]}>Paid</Text>
-            <Text style={[styles.summaryValue, { color: Tokens.secondary, fontWeight: '700' }]}>₹{bill.paid_amount}</Text>
+            <Text style={[styles.summaryLabel, { color: Tokens.secondary }]}>{t('bill.paid')}</Text>
+            <Text style={[styles.summaryValue, { color: Tokens.secondary, fontWeight: '700' }]}>₹{fmt(bill.paid_amount)}</Text>
           </View>
           {bill.due_amount > 0 && (
             <View style={styles.dueRow}>
               <Ionicons name="alert-circle" size={18} color={Tokens.tertiary} />
-              <Text style={styles.dueLabel}>Due (Udhaar)</Text>
-              <Text style={styles.dueValue}>₹{bill.due_amount}</Text>
+              <Text style={styles.dueLabel}>{t('bill.dueUdhaar')}</Text>
+              <Text style={styles.dueValue}>₹{fmt(bill.due_amount)}</Text>
             </View>
           )}
         </View>
 
         {bill.payments && bill.payments.length > 0 && (
           <View style={styles.card}>
-            <Text style={styles.sectionTitle}>Payment History</Text>
+            <Text style={styles.sectionTitle}>{t('bill.paymentHistory')}</Text>
             {bill.payments.map((p, idx) => {
               const pmtDate = p.payment_date ? new Date(p.payment_date) : null;
               return (
@@ -283,9 +278,9 @@ export default function BillDetailScreen() {
                     <View style={styles.payTop}>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                         <Ionicons name={pmtIcons[p.payment_method] as any || 'cash-outline'} size={14} color={Tokens.secondary} />
-                        <Text style={styles.payMethod}>{formatPaymentMethod(p.payment_method)}</Text>
+                        <Text style={styles.payMethod}>{formatPaymentMethod(t, p.payment_method)}</Text>
                       </View>
-                      <Text style={styles.payAmount}>+₹{Number(p.amount).toFixed(2)}</Text>
+                      <Text style={styles.payAmount}>+₹{fmt(Number(p.amount))}</Text>
                     </View>
                     {pmtDate ? (
                       <Text style={styles.payDate}>
@@ -306,7 +301,7 @@ export default function BillDetailScreen() {
               <View style={styles.notesIcon}>
                 <Ionicons name="document-text" size={16} color={Tokens.secondary} />
               </View>
-              <Text style={styles.sectionTitle}>Notes</Text>
+              <Text style={styles.sectionTitle}>{t('common.notes')}</Text>
             </View>
             <Text style={styles.notesText}>{bill.notes}</Text>
           </View>
@@ -328,7 +323,7 @@ export default function BillDetailScreen() {
             <Ionicons name="logo-whatsapp" size={22} color="#fff" />
           )}
           <Text style={styles.shareBtnText}>
-            {sharing ? 'Generating PDF...' : 'Share Invoice'}
+            {sharing ? t('bill.generatingPdf') : t('bill.shareInvoice')}
           </Text>
         </TouchableOpacity>
       </View>

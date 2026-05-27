@@ -7,8 +7,10 @@ import { useBill } from '@/lib/bill-context';
 import { useAuth } from '@/lib/auth-context';
 import { api, type CustomerData } from '@/lib/api';
 import Loader from '@/components/Loader';
+import { useTranslation } from 'react-i18next';
 
 export default function CustomerSelectScreen() {
+  const { t } = useTranslation();
   const { customer, setCustomer } = useBill();
   const { token } = useAuth();
   const [customers, setCustomers] = useState<CustomerData[]>([]);
@@ -50,7 +52,7 @@ export default function CustomerSelectScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.topBtn}>
           <Ionicons name="arrow-back" size={24} color="#1c1c1e" />
         </TouchableOpacity>
-        <Text style={styles.topTitle}>New Bill</Text>
+        <Text style={styles.topTitle}>{t('bill.newBill')}</Text>
         <TouchableOpacity onPress={() => (router as any).push('/bill/history')} style={styles.topBtn}>
           <Ionicons name="receipt-outline" size={22} color="#1c1c1e" />
         </TouchableOpacity>
@@ -61,7 +63,7 @@ export default function CustomerSelectScreen() {
           <Ionicons name="search" size={20} color="#9ca3af" />
           <TextInput
             style={styles.searchInput}
-            placeholder="Search customers..."
+            placeholder={t('bill.searchCustomers')}
             placeholderTextColor="#9ca3af"
             value={search}
             onChangeText={setSearch}
@@ -81,8 +83,8 @@ export default function CustomerSelectScreen() {
             <Ionicons name="person-outline" size={26} color="#0891b2" />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={styles.walkInName}>Walk-in Customer</Text>
-            <Text style={styles.walkInSub}>Bill without customer details</Text>
+            <Text style={styles.walkInName}>{t('bill.walkInCustomer')}</Text>
+            <Text style={styles.walkInSub}>{t('bill.walkInSubtitle')}</Text>
           </View>
           <View style={styles.arrowBtn}>
             <Ionicons name="arrow-forward" size={18} color="#0891b2" />
@@ -92,14 +94,14 @@ export default function CustomerSelectScreen() {
         <View style={styles.divider} />
 
         <View style={styles.sectionHead}>
-          <Text style={styles.sectionTitle}>Saved Customers</Text>
+          <Text style={styles.sectionTitle}>{t('bill.savedCustomers')}</Text>
           <Text style={styles.sectionCount}>{customers.length}</Text>
         </View>
 
         {customers.length === 0 && !loading ? (
           <View style={styles.emptyBox}>
             <Ionicons name="people-outline" size={48} color="#d1d5db" />
-            <Text style={styles.emptyText}>No customers yet</Text>
+            <Text style={styles.emptyText}>{t('bill.noCustomersYet')}</Text>
           </View>
         ) : (
           customers.map(c => (
@@ -109,7 +111,7 @@ export default function CustomerSelectScreen() {
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.customerName}>{c.name}</Text>
-                <Text style={styles.customerPhone}>{c.phone || 'No phone'}</Text>
+                <Text style={styles.customerPhone}>{c.phone || t('customers.noPhone')}</Text>
               </View>
               <View style={styles.customerRight}>
                 {c.total_credit > 0 && (
@@ -125,7 +127,7 @@ export default function CustomerSelectScreen() {
 
         <TouchableOpacity style={styles.addCustomerBtn} onPress={() => (router as any).push('/customers/add?returnTo=bill')}>
           <Ionicons name="person-add-outline" size={20} color="#0891b2" />
-          <Text style={styles.addCustomerText}>Add New Customer</Text>
+          <Text style={styles.addCustomerText}>{t('bill.addNewCustomer')}</Text>
         </TouchableOpacity>
       </ScrollView>
       </KeyboardAvoidingView>

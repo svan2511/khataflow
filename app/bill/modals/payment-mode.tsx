@@ -3,6 +3,7 @@ import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Tokens, Typography, Spacing, BorderRadius } from '@/constants/theme';
 import { useBill } from '@/lib/bill-context';
+import { useTranslation } from 'react-i18next';
 
 const modes = [
   { key: 'Cash', icon: 'cash', label: 'Cash', desc: 'Pay with physical currency' },
@@ -13,6 +14,7 @@ const modes = [
 ] as const;
 
 export default function PaymentModeModal() {
+  const { t } = useTranslation();
   const { paymentMode, setPaymentMode, grandTotal } = useBill();
 
   const handleSelect = (key: string) => {
@@ -26,14 +28,14 @@ export default function PaymentModeModal() {
       <View style={styles.sheet}>
         <View style={styles.handle} />
         <View style={styles.header}>
-          <Text style={styles.title}>Select Payment Mode</Text>
+          <Text style={styles.title}>{t('bill.selectPayment')}</Text>
           <TouchableOpacity onPress={() => router.back()} style={styles.closeBtn}>
             <Ionicons name="close" size={24} color={Tokens['on-surface-variant']} />
           </TouchableOpacity>
         </View>
 
         <Text style={styles.totalText}>
-          Total Amount: <Text style={styles.totalAmount}>₹{grandTotal}</Text>
+          {t('bill.totalAmountLabel')} <Text style={styles.totalAmount}>₹{grandTotal}</Text>
         </Text>
 
         <View style={styles.list}>
@@ -47,8 +49,8 @@ export default function PaymentModeModal() {
                 <Ionicons name={mode.icon as any} size={26} color={paymentMode === mode.key ? Tokens['on-primary'] : Tokens['on-surface-variant']} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={[styles.optionLabel, paymentMode === mode.key && styles.optionLabelActive]}>{mode.label}</Text>
-                <Text style={styles.optionDesc}>{mode.desc}</Text>
+                <Text style={[styles.optionLabel, paymentMode === mode.key && styles.optionLabelActive]}>{t(mode.key === 'Split' ? 'bill.splitLabel' : 'paymentMethods.' + mode.key.toLowerCase())}</Text>
+                <Text style={styles.optionDesc}>{t('bill.' + mode.key.toLowerCase() + 'Desc')}</Text>
               </View>
               {paymentMode === mode.key ? (
                 <Ionicons name="checkmark-circle" size={22} color={Tokens['primary-container']} />
@@ -62,7 +64,7 @@ export default function PaymentModeModal() {
         </View>
 
         <TouchableOpacity style={styles.confirmBtn} onPress={() => router.back()} activeOpacity={0.9}>
-          <Text style={styles.confirmText}>Confirm Payment</Text>
+          <Text style={styles.confirmText}>{t('bill.confirmPayment')}</Text>
         </TouchableOpacity>
       </View>
     </View>

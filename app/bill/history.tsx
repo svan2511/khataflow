@@ -8,6 +8,9 @@ import { Tokens, Typography, Spacing, BorderRadius } from '@/constants/theme';
 import { api, type BillListItem } from '@/lib/api';
 import { useAuth } from '@/lib/auth-context';
 import FullScreenLoader from '@/components/FullScreenLoader';
+import { useTranslation } from 'react-i18next';
+
+const fmt = (n: number) => Number.isInteger(n) ? n.toLocaleString('en-IN') : n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 const DATE_FILTERS = ['Today', 'This Week', 'This Month', 'Custom'];
 
@@ -31,6 +34,7 @@ function getDateRange(filter: string): { date_from?: string; date_to?: string } 
 }
 
 export default function BillHistoryScreen() {
+  const { t } = useTranslation();
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState('Today');
   const [bills, setBills] = useState<BillListItem[]>([]);
@@ -113,17 +117,27 @@ export default function BillHistoryScreen() {
 
   const weekTotal = bills.reduce((s, b) => s + b.total, 0);
 
+  const getFilterLabel = (filter: string) => {
+    switch (filter) {
+      case 'Today': return t('bill.today');
+      case 'This Week': return t('bill.thisWeek');
+      case 'This Month': return t('bill.thisMonth');
+      case 'Custom': return t('bill.custom');
+      default: return filter;
+    }
+  };
+
   const periodLabel = activeFilter === 'Custom'
     ? (customDateFrom && customDateTo
-        ? `${formatDate(customDateFrom)} to ${formatDate(customDateTo)}`
-        : 'Custom')
-    : activeFilter;
+        ? `${formatDate(customDateFrom)} ${t('common.to')} ${formatDate(customDateTo)}`
+        : t('bill.custom'))
+    : getFilterLabel(activeFilter);
 
   const getStatusText = (status: string) => {
     switch (status) {
-      case 'paid': return 'Paid';
-      case 'partial': return 'Partial';
-      case 'pending': return 'Pending';
+      case 'paid': return t('bill.statusPaid');
+      case 'partial': return t('bill.statusPartial');
+      case 'pending': return t('bill.statusPending');
       default: return status;
     }
   };
@@ -144,7 +158,7 @@ export default function BillHistoryScreen() {
         <TouchableOpacity style={styles.iconButton} onPress={() => router.back()}>
           <Ionicons name="arrow-back" size={24} color={Tokens['on-surface-variant']} />
         </TouchableOpacity>
-        <Text style={styles.topBarTitle}>Bill History</Text>
+        <Text style={styles.topBarTitle}>{t('bill.billHistory')}</Text>
         <View style={{ width: 48 }} />
       </View>
 
@@ -153,7 +167,7 @@ export default function BillHistoryScreen() {
           <Ionicons name="search" size={20} color={Tokens['on-surface-variant']} />
           <TextInput
             style={styles.searchInput}
-            placeholder="Search by bill no. or customer..."
+            placeholder={t('bill.searchByBillOrCustomer')}
             placeholderTextColor={Tokens['on-surface-variant']}
             value={searchQuery}
             onChangeText={setSearchQuery}
@@ -167,9 +181,15 @@ export default function BillHistoryScreen() {
             <TouchableOpacity
               key={f}
               style={[styles.filterChip, activeFilter === f && styles.filterChipActive]}
-              onPress={() => setActiveFilter(f)}
+              onPress={() => {
+                setActiveFilter(f);
+                if (f === 'Custom') {
+                  setCustomDateFrom(prev => prev || new Date());
+                  setCustomDateTo(prev => prev || new Date());
+                }
+              }}
             >
-              <Text style={[styles.filterText, activeFilter === f && styles.filterTextActive]}>{f}</Text>
+              <Text style={[styles.filterText, activeFilter === f && styles.filterTextActive]}>{getFilterLabel(f)}</Text>
             </TouchableOpacity>
           ))}
         </ScrollView>
@@ -178,41 +198,51 @@ export default function BillHistoryScreen() {
       {activeFilter === 'Custom' && (
         <View style={styles.customDateRow}>
           <TouchableOpacity style={styles.datePickBtn} onPress={() => setShowDatePicker('from')}>
-            <Text style={styles.dateLabel}>From</Text>
+            <Text style={styles.dateLabel}>{t('bill.from')}</Text>
             <Text style={[styles.dateValue, !customDateFrom && styles.datePlaceholder]}>
-              {customDateFrom ? formatDate(customDateFrom) : 'Select date'}
+              {customDateFrom ? formatDate(customDateFrom) : t('bill.selectDate')}
             </Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.datePickBtn} onPress={() => setShowDatePicker('to')}>
-            <Text style={styles.dateLabel}>To</Text>
+            <Text style={styles.dateLabel}>{t('bill.to')}</Text>
             <Text style={[styles.dateValue, !customDateTo && styles.datePlaceholder]}>
-              {customDateTo ? formatDate(customDateTo) : 'Select date'}
+              {customDateTo ? formatDate(customDateTo) : t('bill.selectDate')}
             </Text>
           </TouchableOpacity>
         </View>
       )}
-      {showDatePicker && (
+      {showDatePicker && showDatePicker === 'from' && (
         <DateTimePicker
-          value={showDatePicker === 'from' ? (customDateFrom || new Date()) : (customDateTo || new Date())}
+          value={customDateFrom || new Date()}
           mode="date"
           display={Platform.OS === 'ios' ? 'inline' : 'default'}
           onChange={handleDateChange}
+          maximumDate={customDateTo || new Date()}
+        />
+      )}
+      {showDatePicker && showDatePicker === 'to' && (
+        <DateTimePicker
+          value={customDateTo || new Date()}
+          mode="date"
+          display={Platform.OS === 'ios' ? 'inline' : 'default'}
+          onChange={handleDateChange}
+          minimumDate={customDateFrom || undefined}
           maximumDate={new Date()}
         />
       )}
 
       <View style={styles.statsRow}>
         <View style={styles.statCard}>
-          <Text style={styles.statValue}>₹{todayTotal}</Text>
-          <Text style={styles.statLabel}>Today</Text>
+          <Text style={styles.statValue}>₹{fmt(todayTotal)}</Text>
+          <Text style={styles.statLabel}>{t('bill.today')}</Text>
         </View>
         <View style={styles.statCard}>
-          <Text style={styles.statValue}>₹{weekTotal}</Text>
+          <Text style={styles.statValue}>₹{fmt(weekTotal)}</Text>
           <Text style={styles.statLabel}>{periodLabel}</Text>
         </View>
         <View style={styles.statCard}>
           <Text style={styles.statValue}>{bills.length}</Text>
-          <Text style={styles.statLabel}>Bills</Text>
+          <Text style={styles.statLabel}>{t('bill.bills')}</Text>
         </View>
       </View>
 
@@ -231,7 +261,7 @@ export default function BillHistoryScreen() {
           {Object.entries(grouped).length === 0 ? (
             <View style={styles.emptyState}>
               <Ionicons name="receipt-outline" size={60} color={Tokens['outline-variant']} />
-              <Text style={styles.emptyText}>No bills found</Text>
+              <Text style={styles.emptyText}>{t('bill.noBillsFound')}</Text>
             </View>
           ) : (
             Object.entries(grouped).map(([date, dateBills]) => (
@@ -249,10 +279,10 @@ export default function BillHistoryScreen() {
                       <View style={styles.billTop}>
                         <View style={styles.billTopLeft}>
                           <Text style={styles.billNo}>{bill.bill_number}</Text>
-                          <Text style={styles.billCustomer}>{bill.customer_name || 'Walk-in Customer'}</Text>
+                          <Text style={styles.billCustomer}>{bill.customer_name || t('bill.walkInCustomer')}</Text>
                         </View>
                         <View style={styles.billTopRight}>
-                          <Text style={styles.billAmount}>₹{bill.total}</Text>
+                          <Text style={styles.billAmount}>₹{fmt(bill.total)}</Text>
                           <View style={[styles.billStatusBadge, getStatusStyle(bill.payment_status)]}>
                             <Text style={styles.billStatusText}>{getStatusText(bill.payment_status)}</Text>
                           </View>

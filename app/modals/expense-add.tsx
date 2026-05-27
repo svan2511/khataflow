@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { View, Text, TouchableOpacity, TextInput, ScrollView, StyleSheet, Alert, ActivityIndicator } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -22,6 +23,7 @@ export default function ExpenseAddModal() {
   const [category, setCategory] = useState('');
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
   const [saving, setSaving] = useState(false);
+  const { t } = useTranslation();
 
   const handleSave = async () => {
     if (!token) return;
@@ -42,11 +44,11 @@ export default function ExpenseAddModal() {
         category: category || undefined,
         expense_date: new Date().toISOString().split('T')[0],
       });
-      Alert.alert('Success', 'Expense recorded successfully.', [
+      Alert.alert('Success', t('expense.savedSuccess'), [
         { text: 'OK', onPress: () => router.back() }
       ]);
     } catch (e: any) {
-      Alert.alert('Error', e.message || 'Failed to record expense');
+      Alert.alert('Error', e.message || t('expense.saveFailed'));
     } finally {
       setSaving(false);
     }
@@ -61,7 +63,7 @@ export default function ExpenseAddModal() {
             <View style={styles.headerIcon}>
               <Ionicons name="card-outline" size={20} color={Tokens['on-secondary-container']} />
             </View>
-            <Text style={styles.headerTitle}>Record Expense</Text>
+            <Text style={styles.headerTitle}>{t('expense.title')}</Text>
           </View>
           <TouchableOpacity style={styles.closeBtn} onPress={() => router.back()}>
             <Ionicons name="close" size={22} color={Tokens['on-surface-variant']} />
@@ -71,7 +73,7 @@ export default function ExpenseAddModal() {
         <ScrollView style={styles.body} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
           {/* Amount Input */}
           <View style={styles.field}>
-            <Text style={styles.label}>Amount (₹)</Text>
+            <Text style={styles.label}>{t('expense.amount')}</Text>
             <View style={styles.amountInputWrap}>
               <Text style={styles.rupeeSign}>₹</Text>
               <TextInput
@@ -87,10 +89,10 @@ export default function ExpenseAddModal() {
 
           {/* Expense Title */}
           <View style={styles.field}>
-            <Text style={styles.label}>Expense Title</Text>
+            <Text style={styles.label}>{t('expense.expenseTitle')}</Text>
             <TextInput
               style={styles.textInput}
-              placeholder="e.g., Electricity, Tea, Transport"
+              placeholder={t('expense.titlePlaceholder')}
               placeholderTextColor={Tokens.outline}
               value={title}
               onChangeText={setTitle}
@@ -99,7 +101,7 @@ export default function ExpenseAddModal() {
 
           {/* Category Dropdown */}
           <View style={styles.field}>
-            <Text style={styles.label}>Category</Text>
+            <Text style={styles.label}>{t('expense.category')}</Text>
             <TouchableOpacity style={styles.selectBtn} onPress={() => setShowCategoryPicker(!showCategoryPicker)}>
               <Text style={[styles.selectText, !category && { color: Tokens.outline }]}>
                 {category || 'Select a category'}
@@ -124,7 +126,7 @@ export default function ExpenseAddModal() {
 
           {/* Date Display */}
           <View style={styles.field}>
-            <Text style={styles.label}>Date</Text>
+            <Text style={styles.label}>{t('expense.date')}</Text>
             <View style={styles.dateInputWrap}>
               <TextInput
                 style={styles.dateInput}
@@ -139,7 +141,7 @@ export default function ExpenseAddModal() {
           {/* Footer Actions */}
           <View style={styles.actions}>
             <TouchableOpacity style={styles.cancelBtn} onPress={() => router.back()}>
-              <Text style={styles.cancelBtnText}>Cancel</Text>
+              <Text style={styles.cancelBtnText}>{t('common.cancel')}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.submitBtn} onPress={handleSave} disabled={saving}>
               {saving ? (
@@ -147,7 +149,7 @@ export default function ExpenseAddModal() {
               ) : (
                 <>
                   <Ionicons name="checkmark-circle" size={18} color={Tokens['on-primary']} />
-                  <Text style={styles.submitBtnText}>Record Expense</Text>
+                  <Text style={styles.submitBtnText}>{t('expense.save')}</Text>
                 </>
               )}
             </TouchableOpacity>

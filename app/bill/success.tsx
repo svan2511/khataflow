@@ -9,29 +9,31 @@ import { useAuth } from '@/lib/auth-context';
 import { api, type BillDetail } from '@/lib/api';
 import { shareInvoicePdf, shareOnWhatsApp } from '@/lib/bill-pdf';
 import Loader from '@/components/Loader';
+import { useTranslation } from 'react-i18next';
 
-function formatPaymentMethod(method: string): string {
+function formatPaymentMethod(t: any, method: string): string {
   const map: Record<string, string> = {
-    cash: 'Cash',
-    upi: 'UPI',
-    card: 'Card',
-    credit: 'Credit (Udhaar)',
-    mix: 'Split Payment',
+    cash: t('paymentMethods.cash'),
+    upi: t('paymentMethods.upi'),
+    card: t('paymentMethods.card'),
+    credit: t('paymentMethods.credit'),
+    mix: t('paymentMethods.mix'),
   };
   return map[method] || method;
 }
 
-function formatStatus(status: string): string {
+function formatStatus(t: any, status: string): string {
   const map: Record<string, string> = {
-    paid: 'Paid',
-    partial: 'Partial',
-    pending: 'Pending',
-    cancelled: 'Cancelled',
+    paid: t('bill.statusPaid'),
+    partial: t('bill.statusPartial'),
+    pending: t('bill.statusPending'),
+    cancelled: t('bill.statusCancelled'),
   };
   return map[status] || status;
 }
 
 export default function BillSuccessScreen() {
+  const { t } = useTranslation();
   const { bill: billJson } = useLocalSearchParams<{ bill: string }>();
   const bill: BillDetail | null = billJson ? JSON.parse(billJson) : null;
   const scaleAnim = useRef(new Animated.Value(0)).current;
@@ -91,8 +93,8 @@ export default function BillSuccessScreen() {
     }
   };
 
-  const paymentMethod = bill ? formatPaymentMethod(bill.payment_method) : 'Cash';
-  const paymentStatus = bill ? formatStatus(bill.payment_status) : 'Pending';
+  const paymentMethod = bill ? formatPaymentMethod(t, bill.payment_method) : t('paymentMethods.cash');
+  const paymentStatus = bill ? formatStatus(t, bill.payment_status) : t('bill.statusPending');
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
@@ -100,13 +102,13 @@ export default function BillSuccessScreen() {
         <Animated.View style={[styles.successIcon, { transform: [{ scale: scaleAnim }] }]}>
           <Ionicons name="checkmark-circle" size={52} color={Tokens.secondary} />
         </Animated.View>
-        <Text style={styles.title}>Bill Generated!</Text>
-        <Text style={styles.subtitle}>Bill {bill?.bill_number || ''} has been created successfully</Text>
+        <Text style={styles.title}>{t('bill.billGenerated')}</Text>
+        <Text style={styles.subtitle}>{t('bill.billCreated', { number: bill?.bill_number || '' })}</Text>
 
         <View style={styles.summaryCard}>
           <View style={styles.summaryHeader}>
             <View>
-              <Text style={styles.summaryLabel}>Bill Number</Text>
+              <Text style={styles.summaryLabel}>{t('bill.billNumber')}</Text>
               <Text style={styles.summaryBillNo}>{bill?.bill_number || 'N/A'}</Text>
             </View>
             <View style={[styles.statusBadge, bill?.payment_status === 'paid' ? styles.statusPaid : styles.statusPending]}>
@@ -116,7 +118,7 @@ export default function BillSuccessScreen() {
 
           <View style={styles.summaryMeta}>
             <View style={styles.metaRow}>
-              <Text style={styles.metaLabel}>Date</Text>
+              <Text style={styles.metaLabel}>{t('bill.dateLabel')}</Text>
               <Text style={styles.metaValue}>
                 {bill?.created_at
                   ? new Date(bill.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
@@ -124,11 +126,11 @@ export default function BillSuccessScreen() {
               </Text>
             </View>
             <View style={styles.metaRow}>
-              <Text style={styles.metaLabel}>Customer</Text>
-              <Text style={styles.metaValue}>{bill?.customer?.name || 'Walk-in Customer'}</Text>
+              <Text style={styles.metaLabel}>{t('bill.customerLabel')}</Text>
+              <Text style={styles.metaValue}>{bill?.customer?.name || t('bill.walkInCustomer')}</Text>
             </View>
             <View style={styles.metaRow}>
-              <Text style={styles.metaLabel}>Payment</Text>
+              <Text style={styles.metaLabel}>{t('bill.paymentLabel')}</Text>
               <Text style={styles.metaValue}>{paymentMethod}</Text>
             </View>
           </View>
@@ -137,16 +139,16 @@ export default function BillSuccessScreen() {
 
           <View style={styles.paymentBreakdown}>
             <View style={styles.pbRow}>
-              <Text style={styles.pbLabel}>Total Amount</Text>
+              <Text style={styles.pbLabel}>{t('bill.totalAmount')}</Text>
               <Text style={styles.pbValue}>₹{bill?.total || 0}</Text>
             </View>
             <View style={styles.pbRow}>
-              <Text style={[styles.pbLabel, { color: Tokens.secondary }]}>Paid</Text>
+              <Text style={[styles.pbLabel, { color: Tokens.secondary }]}>{t('bill.paid')}</Text>
               <Text style={[styles.pbValue, { color: Tokens.secondary }]}>₹{bill?.paid_amount || 0}</Text>
             </View>
             {(bill?.due_amount ?? 0) > 0 && (
               <View style={styles.pbRow}>
-                <Text style={[styles.pbLabel, { color: Tokens.tertiary }]}>Due (Udhaar)</Text>
+                <Text style={[styles.pbLabel, { color: Tokens.tertiary }]}>{t('bill.dueUdhaar')}</Text>
                 <Text style={[styles.pbValue, { color: Tokens.tertiary }]}>₹{bill?.due_amount || 0}</Text>
               </View>
             )}
@@ -166,14 +168,14 @@ export default function BillSuccessScreen() {
               <Ionicons name="logo-whatsapp" size={24} color="#fff" />
             )}
             <Text style={styles.shareBtnText}>
-              {sharing ? 'Generating PDF...' : 'Share Invoice'}
+              {sharing ? t('bill.generatingPdf') : t('bill.shareInvoice')}
             </Text>
           </TouchableOpacity>
         </View>
 
         <TouchableOpacity style={styles.homeLink} onPress={handleHome} activeOpacity={0.7}>
           <Ionicons name="arrow-back" size={18} color={Tokens.secondary} />
-          <Text style={styles.homeLinkText}>Back to Home</Text>
+          <Text style={styles.homeLinkText}>{t('bill.backToHome')}</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>

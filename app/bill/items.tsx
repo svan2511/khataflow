@@ -7,8 +7,10 @@ import { useBill } from '@/lib/bill-context';
 import { useAuth } from '@/lib/auth-context';
 import { api, type ProductData } from '@/lib/api';
 import Loader from '@/components/Loader';
+import { useTranslation } from 'react-i18next';
 
 export default function ProductSelectScreen() {
+  const { t } = useTranslation();
   const { items, customer, addItem, updateItemQuantity, removeItem, grandTotal, setCustomer } = useBill();
   const { token } = useAuth();
   const { newCustomerId, newCustomerName, newCustomerPhone } = useLocalSearchParams<{
@@ -139,15 +141,7 @@ const displayUnit = (unit?: string) => unit || 'pcs';
     if (!quickName.trim() || !quickPrice.trim() || !token) return;
     setQuickSaving(true);
     try {
-      const formData = new FormData();
-      formData.append('name', quickName.trim());
-      formData.append('price', quickPrice);
-      formData.append('unit', quickUnit);
-      if (quickCategory.trim()) formData.append('category_name', quickCategory.trim());
-      if (quickCostPrice) formData.append('cost_price', quickCostPrice);
-      if (quickStock) formData.append('stock_quantity', quickStock);
-      if (quickLowStock) formData.append('low_stock_threshold', quickLowStock);
-      const res = await api.createProductFull(token, formData);
+      const res = await api.createProductFull(token, buildQuickForm(false));
       const product = res.data;
       addItem({
         id: product.id,
@@ -167,10 +161,47 @@ const displayUnit = (unit?: string) => unit || 'pcs';
       setShowQuickAdd(false);
       fetchProducts(search);
     } catch (e: any) {
-      alert(e.message || 'Failed to create product');
+      if (quickCategory.trim() && /UNIQUE|duplicate/i.test(e?.message || '')) {
+        try {
+          const res = await api.createProductFull(token, buildQuickForm(true));
+          const product = res.data;
+          addItem({
+            id: product.id,
+            product_uuid: product.id,
+            name: product.name,
+            rate: product.price,
+            quantity: 1,
+            unit: product.unit,
+          });
+          setQuickName('');
+          setQuickPrice('');
+          setQuickCostPrice('');
+          setQuickUnit('pc');
+          setQuickCategory('');
+          setQuickStock('');
+          setQuickLowStock('');
+          setShowQuickAdd(false);
+          fetchProducts(search);
+          return;
+        } catch {}
+      }
+      const apiMsg = e?.message || '';
+      alert(/low stock threshold/i.test(apiMsg) ? t('validation.lowStockThresholdRequired') : apiMsg || t('bill.failedToCreateProduct'));
     } finally {
       setQuickSaving(false);
     }
+  };
+
+  const buildQuickForm = (skipCategory: boolean) => {
+    const fd = new FormData();
+    fd.append('name', quickName.trim());
+    fd.append('price', quickPrice);
+    fd.append('unit', quickUnit);
+    if (!skipCategory && quickCategory.trim()) fd.append('category_name', quickCategory.trim());
+    if (quickCostPrice) fd.append('cost_price', quickCostPrice);
+    if (quickStock) fd.append('stock_quantity', quickStock);
+    if (quickLowStock) fd.append('low_stock_threshold', quickLowStock);
+    return fd;
   };
 
   return (
@@ -181,9 +212,9 @@ const displayUnit = (unit?: string) => unit || 'pcs';
             <Ionicons name="arrow-back" size={24} color="#1c1c1e" />
           </TouchableOpacity>
           <View style={{ flex: 1, minWidth: 0 }}>
-            <Text style={styles.topTitle}>Add Items</Text>
+            <Text style={styles.topTitle}>{t('bill.addItems')}</Text>
             <Text style={styles.topSubtitle} numberOfLines={1}>
-              {customer?.name || 'Walk-in Customer'}
+              {customer?.name || t('common.walkInCustomer')}
             </Text>
           </View>
           <View style={{ width: 44 }} />
@@ -194,7 +225,7 @@ const displayUnit = (unit?: string) => unit || 'pcs';
             <Ionicons name="search" size={20} color="#9ca3af" />
             <TextInput
               style={styles.searchInput}
-              placeholder="Search products..."
+              placeholder={t('bill.searchProducts')}
               placeholderTextColor="#9ca3af"
               value={search}
               onChangeText={setSearch}
@@ -212,7 +243,7 @@ const displayUnit = (unit?: string) => unit || 'pcs';
           {items.length > 0 && (
             <>
               <Text style={styles.sectionTitle}>
-                Added Items ({items.length})
+                {t('bill.addedItems')} ({items.length})
               </Text>
               <View style={styles.addedSection}>
                   {items.map(item => {
@@ -271,7 +302,7 @@ const displayUnit = (unit?: string) => unit || 'pcs';
             </>
           )}
 
-          <Text style={styles.sectionTitle}>All Products</Text>
+          <Text style={styles.sectionTitle}>{t('bill.allProducts')}</Text>
 
           {loading ? (
             <View style={styles.loadingBox}>
@@ -308,22 +339,22 @@ const displayUnit = (unit?: string) => unit || 'pcs';
 
           {showQuickAdd && (
             <View style={styles.quickAddCard}>
-              <Text style={styles.quickAddTitle}>New Product</Text>
-              <Text style={styles.quickAddSubtitle}>This will be saved to your product list</Text>
+              <Text style={styles.quickAddTitle}>{t('bill.newProduct')}</Text>
+              <Text style={styles.quickAddSubtitle}>{t('bill.willBeSaved')}</Text>
 
-              <Text style={styles.qaLabel}>Product Name *</Text>
+              <Text style={styles.qaLabel}>{t('bill.productName')}</Text>
               <TextInput
                 style={styles.quickAddInput}
-                placeholder="e.g. Aashirvaad Atta 5kg"
+                placeholder={t('bill.productNamePlaceholder')}
                 placeholderTextColor="#9ca3af"
                 value={quickName}
                 onChangeText={setQuickName}
               />
 
-              <Text style={styles.qaLabel}>Category</Text>
+              <Text style={styles.qaLabel}>{t('bill.category')}</Text>
               <TextInput
                 style={styles.quickAddInput}
-                placeholder="e.g. Grocery"
+                placeholder={t('bill.categoryPlaceholder')}
                 placeholderTextColor="#9ca3af"
                 value={quickCategory}
                 onChangeText={setQuickCategory}
@@ -331,7 +362,7 @@ const displayUnit = (unit?: string) => unit || 'pcs';
 
               <View style={styles.quickAddRow}>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.qaLabel}>Selling Price (₹) *</Text>
+                  <Text style={styles.qaLabel}>{t('bill.sellingPrice')}</Text>
                   <TextInput
                     style={styles.quickAddInput}
                     placeholder="0.00"
@@ -342,7 +373,7 @@ const displayUnit = (unit?: string) => unit || 'pcs';
                   />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.qaLabel}>Purchase Price (₹)</Text>
+                  <Text style={styles.qaLabel}>{t('bill.purchasePrice')}</Text>
                   <TextInput
                     style={styles.quickAddInput}
                     placeholder="0.00"
@@ -356,7 +387,7 @@ const displayUnit = (unit?: string) => unit || 'pcs';
 
               <View style={styles.quickAddRow}>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.qaLabel}>Unit *</Text>
+                  <Text style={styles.qaLabel}>{t('bill.unit')}</Text>
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.qaUnitRow}>
                     {quickUnits.map(u => (
                       <TouchableOpacity
@@ -370,7 +401,7 @@ const displayUnit = (unit?: string) => unit || 'pcs';
                   </ScrollView>
                 </View>
                 <View style={{ width: 100 }}>
-                  <Text style={styles.qaLabel}>Total Stock</Text>
+                  <Text style={styles.qaLabel}>{t('bill.totalStock')}</Text>
                   <TextInput
                     style={styles.quickAddInput}
                     placeholder="0"
@@ -382,10 +413,10 @@ const displayUnit = (unit?: string) => unit || 'pcs';
                 </View>
               </View>
 
-              <Text style={styles.qaLabel}>Low Stock Alert At</Text>
+              <Text style={styles.qaLabel}>{t('bill.lowStockAlert')}</Text>
               <TextInput
                 style={styles.quickAddInput}
-                placeholder="e.g. 5"
+                placeholder={t('bill.lowStockPlaceholder')}
                 placeholderTextColor="#9ca3af"
                 value={quickLowStock}
                 onChangeText={setQuickLowStock}
@@ -394,7 +425,7 @@ const displayUnit = (unit?: string) => unit || 'pcs';
 
               <View style={styles.quickAddActions}>
                 <TouchableOpacity style={styles.quickAddCancel} onPress={() => { setShowQuickAdd(false); setQuickName(''); setQuickPrice(''); setQuickCostPrice(''); setQuickUnit('pc'); setQuickCategory(''); setQuickStock(''); setQuickLowStock(''); }}>
-                  <Text style={styles.quickAddCancelText}>Cancel</Text>
+                  <Text style={styles.quickAddCancelText}>{t('common.cancel')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.quickAddSubmit, (!quickName.trim() || !quickPrice.trim() || quickSaving) && { opacity: 0.5 }]}
@@ -404,7 +435,7 @@ const displayUnit = (unit?: string) => unit || 'pcs';
                   {quickSaving ? (
                     <Loader size={16} color="#fff" />
                   ) : (
-                    <Text style={styles.quickAddSubmitText}>Save & Add</Text>
+                    <Text style={styles.quickAddSubmitText}>{t('bill.saveAndAdd')}</Text>
                   )}
                 </TouchableOpacity>
               </View>
@@ -413,7 +444,7 @@ const displayUnit = (unit?: string) => unit || 'pcs';
 
           <TouchableOpacity style={styles.quickAddToggle} onPress={() => setShowQuickAdd(!showQuickAdd)}>
             <Ionicons name={showQuickAdd ? 'close-outline' : 'add-circle-outline'} size={20} color="#0891b2" />
-            <Text style={styles.quickAddToggleText}>{showQuickAdd ? 'Cancel' : 'New Product'}</Text>
+            <Text style={styles.quickAddToggleText}>{showQuickAdd ? t('common.cancel') : t('bill.newProduct')}</Text>
           </TouchableOpacity>
 
           <View style={{ height: 100 }} />
@@ -421,7 +452,7 @@ const displayUnit = (unit?: string) => unit || 'pcs';
 
         <View style={[styles.bottomBar, { paddingBottom: 24 + insets.bottom }]}>
           <View style={styles.bottomLeft}>
-            <Text style={styles.bottomLabel}>Items</Text>
+            <Text style={styles.bottomLabel}>{t('bill.items')}</Text>
             <Text style={styles.bottomCount}>{items.length}</Text>
             <View style={styles.bottomDivider} />
             <Text style={styles.bottomTotal}>₹{grandTotal}</Text>
@@ -432,7 +463,7 @@ const displayUnit = (unit?: string) => unit || 'pcs';
             disabled={items.length === 0}
             activeOpacity={0.9}
           >
-            <Text style={styles.reviewBtnText}>Review Bill</Text>
+            <Text style={styles.reviewBtnText}>{t('bill.reviewBill')}</Text>
             <Ionicons name="arrow-forward" size={20} color="#fff" />
           </TouchableOpacity>
         </View>
@@ -467,7 +498,7 @@ const displayUnit = (unit?: string) => unit || 'pcs';
                   </View>
 
                   <View style={styles.modalQtySection}>
-                    <Text style={styles.modalQtyLabel}>Quantity</Text>
+                    <Text style={styles.modalQtyLabel}>{t('bill.quantity')}</Text>
                     <View style={styles.modalQtyControl}>
                       <TouchableOpacity
                         style={styles.modalQtyBtn}
@@ -530,7 +561,7 @@ const displayUnit = (unit?: string) => unit || 'pcs';
                   </View>
 
                   <View style={styles.modalGstSection}>
-                    <Text style={styles.modalGstLabel}>GST Rate (optional)</Text>
+                    <Text style={styles.modalGstLabel}>{t('bill.gstRate')}</Text>
                     <View style={styles.modalGstRow}>
                       {GST_RATES.map(rate => (
                         <TouchableOpacity
@@ -558,7 +589,7 @@ const displayUnit = (unit?: string) => unit || 'pcs';
                   </View>
 
                   <View style={[styles.modalTotal, modalGstRate > 0 && { backgroundColor: '#fef3c7' }]}>
-                    <Text style={styles.modalTotalLabel}>Line Total</Text>
+                    <Text style={styles.modalTotalLabel}>{t('bill.lineTotal')}</Text>
                     <Text style={styles.modalTotalValue}>
                       ₹{(modalProduct.price * modalQty * (1 + modalGstRate / 100)).toFixed(2)}
                     </Text>
@@ -572,8 +603,8 @@ const displayUnit = (unit?: string) => unit || 'pcs';
                     <Ionicons name="checkmark-circle" size={20} color="#fff" />
                     <Text style={styles.modalConfirmText}>
                       {items.some(i => i.product_uuid === modalProduct.id)
-                        ? 'Update Quantity'
-                        : 'Add to Bill'
+                        ? t('bill.updateQuantity')
+                        : t('bill.addToBill')
                       }
                     </Text>
                   </TouchableOpacity>
@@ -582,7 +613,7 @@ const displayUnit = (unit?: string) => unit || 'pcs';
                     style={styles.modalCancelBtn}
                     onPress={closeQtyModal}
                   >
-                    <Text style={styles.modalCancelText}>Cancel</Text>
+                    <Text style={styles.modalCancelText}>{t('common.cancel')}</Text>
                   </TouchableOpacity>
                 </>
               )}

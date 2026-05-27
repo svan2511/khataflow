@@ -6,15 +6,18 @@ import { useAuth } from '@/lib/auth-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function DashboardScreen() {
   const [data, setData] = useState<DashboardData | null>(null);
-  const [shopName, setShopName] = useState('Your Shop');
+  const [shopName, setShopName] = useState('');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const { token } = useAuth();
+  const { t } = useTranslation();
+  const fmt = (n: number) => Number.isInteger(n) ? n.toLocaleString('en-IN') : n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   const fetchDashboard = useCallback(async (showLoader?: boolean) => {
     if (!token) {
@@ -63,9 +66,8 @@ export default function DashboardScreen() {
     <SafeAreaView style={styles.safeArea} edges={['top']}>
       <View style={styles.topBar}>
         <View>
-           <Text style={styles.shopName}>Welcome</Text>
+          <Text style={styles.shopName}>{t('common.welcome')}</Text>
           <Text style={styles.greeting}>{shopName}</Text>
-         
         </View>
         <TouchableOpacity style={styles.profileBtn} onPress={() => (router as any).push('/edit-profile')}>
           <Ionicons name="person-circle-outline" size={32} color={Tokens.secondary} />
@@ -78,48 +80,53 @@ export default function DashboardScreen() {
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Tokens.secondary} />}
       >
-        {/* Today's Sales */}
         <View style={styles.salesCard}>
-          <Text style={styles.salesLabel}>Today's Sales</Text>
-          <Text style={styles.salesAmount}>₹{(data?.today_sales ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Text>
-          <View style={styles.salesFooter}>
+          <View style={styles.salesHeader}>
+            <Text style={styles.salesLabel}>{t('dashboard.todaysSales')}</Text>
             <View style={styles.salesBadge}>
-              <Ionicons name="receipt-outline" size={14} color={Tokens['on-secondary']} />
-              <Text style={styles.salesBadgeText}>{data?.today_bills_count ?? 0} bills</Text>
+              <Ionicons name="receipt-outline" size={12} color="#fff" />
+              <Text style={styles.salesBadgeText}>{data?.today_bills_count ?? 0} {t('dashboard.bills')}</Text>
+            </View>
+          </View>
+          <Text style={styles.salesAmount}>₹{fmt(data?.today_sales ?? 0)}</Text>
+          
+          <View style={styles.salesFooter}>
+            <View style={styles.cashCollection}>
+              <Ionicons name="wallet-outline" size={14} color="rgba(255,255,255,0.8)" />
+              <Text style={styles.cashLabel}>{t('dashboard.cashInHand')}: </Text>
+              <Text style={styles.cashValue}>₹{fmt(data?.today_cash ?? 0)}</Text>
             </View>
           </View>
         </View>
 
-        {/* Stats Row */}
         <View style={styles.statsRow}>
           <View style={styles.statCard}>
             <View style={[styles.statIcon, { backgroundColor: '#e8f5e9' }]}>
               <Ionicons name="receipt" size={20} color="#2e7d32" />
             </View>
             <Text style={styles.statValue}>{data?.today_bills_count ?? 0}</Text>
-            <Text style={styles.statLabel}>Bills</Text>
+            <Text style={styles.statLabel}>{t('dashboard.billsLabel')}</Text>
           </View>
           <View style={styles.statCard}>
             <View style={[styles.statIcon, { backgroundColor: '#fff3e0' }]}>
               <Ionicons name="cash" size={20} color="#e65100" />
             </View>
-            <Text style={styles.statValue}>₹{(data?.total_credit ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</Text>
-            <Text style={styles.statLabel}>Credit amount</Text>
+            <Text style={styles.statValue}>₹{fmt(data?.total_credit ?? 0)}</Text>
+            <Text style={styles.statLabel}>{t('dashboard.creditAmount')}</Text>
           </View>
           <View style={styles.statCard}>
             <View style={[styles.statIcon, { backgroundColor: '#e3f2fd' }]}>
               <Ionicons name="people" size={20} color="#1565c0" />
             </View>
             <Text style={styles.statValue}>{creditCustomers.length}</Text>
-            <Text style={styles.statLabel}>Creditors</Text>
+            <Text style={styles.statLabel}>{t('dashboard.creditors')}</Text>
           </View>
         </View>
 
-        {/* Credit Customers */}
         {creditCustomers.length > 0 && (
           <View style={styles.section}>
             <View style={styles.sectionHeaderRow}>
-              <Text style={styles.sectionTitle}> Customers on Credit </Text>
+              <Text style={styles.sectionTitle}>{t('dashboard.customersOnCredit')}</Text>
             </View>
             <View style={styles.creditList}>
               {creditCustomers.slice(0, 3).map((c, i) => (
@@ -136,7 +143,7 @@ export default function DashboardScreen() {
                     <Text style={styles.creditName} numberOfLines={1}>{c.name}</Text>
                     {c.phone && <Text style={styles.creditPhone} numberOfLines={1}>{c.phone}</Text>}
                   </View>
-                  <Text style={styles.creditAmount}>₹{c.total_credit.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Text>
+                  <Text style={styles.creditAmount}>₹{fmt(c.total_credit)}</Text>
                 </TouchableOpacity>
               ))}
               <TouchableOpacity
@@ -144,50 +151,48 @@ export default function DashboardScreen() {
                 onPress={() => (router as any).push('/customers?creditOnly=true')}
               >
                 <Ionicons name="people-outline" size={16} color={Tokens.secondary} />
-                <Text style={styles.viewAllText}>View All ({creditCustomers.length})</Text>
+                <Text style={styles.viewAllText}>{t('common.viewAll')} ({creditCustomers.length})</Text>
                 <Ionicons name="chevron-forward" size={16} color={Tokens.secondary} />
               </TouchableOpacity>
             </View>
           </View>
         )}
 
-        {/* Quick Actions */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Quick Actions</Text>
+          <Text style={styles.sectionTitle}>{t('dashboard.quickActions')}</Text>
           <View style={styles.actionsGrid}>
             <TouchableOpacity style={styles.actionBtn} activeOpacity={0.8} onPress={() => (router as any).push('/bill')}>
               <View style={[styles.actionIcon, { backgroundColor: '#0891b2' }]}>
                 <Ionicons name="add-circle" size={28} color="#fff" />
               </View>
-              <Text style={styles.actionText}>New Bill</Text>
+              <Text style={styles.actionText}>{t('dashboard.newBill')}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.actionBtn} activeOpacity={0.8} onPress={() => (router as any).push('/bill/history')}>
               <View style={[styles.actionIcon, { backgroundColor: '#7c3aed' }]}>
                 <Ionicons name="time" size={28} color="#fff" />
               </View>
-              <Text style={styles.actionText}>History</Text>
+              <Text style={styles.actionText}>{t('dashboard.history')}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.actionBtn} activeOpacity={0.8} onPress={() => (router as any).push('/inventory')}>
               <View style={[styles.actionIcon, { backgroundColor: '#d97706' }]}>
                 <Ionicons name="cube" size={28} color="#fff" />
               </View>
-              <Text style={styles.actionText}>Inventory</Text>
+              <Text style={styles.actionText}>{t('dashboard.inventory')}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.actionBtn} activeOpacity={0.8} onPress={() => (router as any).push('/customers')}>
               <View style={[styles.actionIcon, { backgroundColor: '#dc2626' }]}>
                 <Ionicons name="people" size={28} color="#fff" />
               </View>
-              <Text style={styles.actionText}>Customers</Text>
+              <Text style={styles.actionText}>{t('dashboard.customers')}</Text>
             </TouchableOpacity>
           </View>
         </View>
 
-        {/* Recent Bills */}
         <View style={styles.section}>
           <View style={styles.sectionHeaderRow}>
-            <Text style={styles.sectionTitle}>Recent Bills</Text>
+            <Text style={styles.sectionTitle}>{t('dashboard.recentBills')}</Text>
             <TouchableOpacity style={styles.viewAllLink} onPress={() => (router as any).push('/bill/history')}>
-              <Text style={styles.viewAllLinkText}>View All</Text>
+              <Text style={styles.viewAllLinkText}>{t('common.viewAll')}</Text>
               <Ionicons name="chevron-forward" size={14} color={Tokens.secondary} />
             </TouchableOpacity>
           </View>
@@ -199,17 +204,17 @@ export default function DashboardScreen() {
                 </View>
                 <View style={{ flex: 1, minWidth: 0 }}>
                   <Text style={styles.billName} numberOfLines={1}>{bill.bill_number}</Text>
-                  <Text style={styles.billCustomer} numberOfLines={1}>{bill.customer_name || 'Walk-in Customer'}</Text>
+                  <Text style={styles.billCustomer} numberOfLines={1}>{bill.customer_name || t('common.walkInCustomer')}</Text>
                 </View>
                 <View style={{ alignItems: 'flex-end' }}>
-                  <Text style={styles.billTotal}>₹{bill.total.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</Text>
+                  <Text style={styles.billTotal}>₹{fmt(bill.total)}</Text>
                   <View style={[styles.billStatusDot, bill.payment_status === 'paid' ? styles.dotPaid : styles.dotPending]} />
                 </View>
               </TouchableOpacity>
             )) : (
               <View style={styles.emptyBills}>
                 <Ionicons name="receipt-outline" size={36} color="#d1d5db" />
-                <Text style={styles.emptyBillsText}>No bills today</Text>
+                <Text style={styles.emptyBillsText}>{t('dashboard.noBillsToday')}</Text>
               </View>
             )}
           </View>
@@ -238,14 +243,21 @@ const styles = StyleSheet.create({
     backgroundColor: '#006b59', borderRadius: 20, padding: 22,
     shadowColor: '#006b59', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.3, shadowRadius: 16, elevation: 6,
   },
-  salesLabel: { fontSize: 14, fontWeight: '600', color: 'rgba(255,255,255,0.8)', letterSpacing: 0.3 },
-  salesAmount: { fontSize: 36, fontWeight: '800', color: '#fff', marginTop: 4, letterSpacing: -0.5 },
-  salesFooter: { flexDirection: 'row', marginTop: 12 },
+  salesHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  salesLabel: { fontSize: 13, fontWeight: '600', color: 'rgba(255,255,255,0.85)', textTransform: 'uppercase', letterSpacing: 0.5 },
+  salesAmount: { fontSize: 38, fontWeight: '800', color: '#fff', marginTop: 8, letterSpacing: -0.5 },
   salesBadge: {
     flexDirection: 'row', alignItems: 'center', gap: 4,
-    backgroundColor: 'rgba(255,255,255,0.2)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.15)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20,
   },
   salesBadgeText: { fontSize: 12, fontWeight: '600', color: '#fff' },
+  salesFooter: { marginTop: 16, flexDirection: 'row', alignItems: 'center' },
+  cashCollection: {
+    flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.1)',
+    paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12, gap: 6,
+  },
+  cashLabel: { fontSize: 12, fontWeight: '600', color: 'rgba(255,255,255,0.8)' },
+  cashValue: { fontSize: 14, fontWeight: '700', color: '#fff' },
 
   // Stats
   statsRow: { flexDirection: 'row', gap: 10 },

@@ -6,6 +6,7 @@ import { Tokens, Typography, Spacing, BorderRadius } from '@/constants/theme';
 import { useAuth } from '@/lib/auth-context';
 import { useToast } from '@/components/toast-provider';
 import { api } from '@/lib/api';
+import { useTranslation } from 'react-i18next';
 
 const PAYMENT_METHODS = [
   { key: 'cash', icon: 'cash', label: 'Cash' },
@@ -14,6 +15,8 @@ const PAYMENT_METHODS = [
 ] as const;
 
 export default function RecordPaymentModal() {
+  const { t } = useTranslation();
+  const fmt = (n: number) => Number.isInteger(n) ? n.toLocaleString('en-IN') : n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const { billUuid, billNumber, customerName, total, dueAmount: dueAmountParam } = useLocalSearchParams<{
     billUuid: string;
     billNumber: string;
@@ -36,11 +39,11 @@ export default function RecordPaymentModal() {
     if (!token || !billUuid) return;
     const parsedAmount = parseFloat(amount);
     if (isNaN(parsedAmount) || parsedAmount <= 0) {
-      showToast({ type: 'error', title: 'Validation', message: 'Enter a valid amount.' });
+      showToast({ type: 'error', title: t('common.error'), message: t('bill.enterValidAmount') });
       return;
     }
     if (parsedAmount > dueAmount) {
-      showToast({ type: 'error', title: 'Validation', message: `Amount cannot exceed due amount (₹${dueAmount.toFixed(2)}).` });
+      showToast({ type: 'error', title: t('common.error'), message: t('bill.amountExceedsDue', { due: dueAmount.toFixed(2) }) });
       return;
     }
 
@@ -52,10 +55,10 @@ export default function RecordPaymentModal() {
         reference: reference.trim() || undefined,
         notes: notes.trim() || undefined,
       });
-      showToast({ type: 'success', title: 'Payment Recorded', message: `₹${parsedAmount.toFixed(2)} received.` });
+      showToast({ type: 'success', title: t('bill.paymentRecorded'), message: t('bill.paymentReceived', { amount: parsedAmount.toFixed(2) }) });
       router.back();
     } catch (e: any) {
-      showToast({ type: 'error', title: 'Error', message: e?.message || 'Failed to record payment.' });
+      showToast({ type: 'error', title: t('common.error'), message: e?.message || t('bill.paymentFailed') });
     } finally {
       setSaving(false);
     }
@@ -68,7 +71,7 @@ export default function RecordPaymentModal() {
         <View style={styles.sheet}>
           <View style={styles.handle} />
           <View style={styles.header}>
-            <Text style={styles.title}>Record Payment</Text>
+            <Text style={styles.title}>{t('bill.recordPayment')}</Text>
             <TouchableOpacity onPress={() => router.back()} style={styles.closeBtn}>
               <Ionicons name="close" size={24} color={Tokens['on-surface-variant']} />
             </TouchableOpacity>
@@ -79,17 +82,17 @@ export default function RecordPaymentModal() {
               <Text style={styles.billInfoNumber}>{billNumber}</Text>
               {customerName ? <Text style={styles.billInfoCustomer}>{customerName}</Text> : null}
               <View style={styles.billInfoRow}>
-                <Text style={styles.billInfoLabel}>Total</Text>
-                <Text style={styles.billInfoValue}>₹{billTotal.toFixed(2)}</Text>
+                <Text style={styles.billInfoLabel}>{t('common.total')}</Text>
+                <Text style={styles.billInfoValue}>₹{fmt(billTotal)}</Text>
               </View>
               <View style={styles.billInfoRow}>
-                <Text style={styles.billInfoLabel}>Due</Text>
-                <Text style={[styles.billInfoValue, { color: Tokens.tertiary }]}>₹{dueAmount.toFixed(2)}</Text>
+                <Text style={styles.billInfoLabel}>{t('common.due')}</Text>
+                <Text style={[styles.billInfoValue, { color: Tokens.tertiary }]}>₹{fmt(dueAmount)}</Text>
               </View>
             </View>
 
             <View style={styles.fieldGroup}>
-              <Text style={styles.label}>Amount (₹)</Text>
+              <Text style={styles.label}>{t('bill.amount')}</Text>
               <TextInput
                 style={styles.amountInput}
                 value={amount}
@@ -102,7 +105,7 @@ export default function RecordPaymentModal() {
             </View>
 
             <View style={styles.fieldGroup}>
-              <Text style={styles.label}>Payment Method</Text>
+              <Text style={styles.label}>{t('bill.paymentMethod')}</Text>
               <View style={styles.methodRow}>
                 {PAYMENT_METHODS.map(m => (
                   <TouchableOpacity
@@ -111,30 +114,30 @@ export default function RecordPaymentModal() {
                     onPress={() => setPaymentMethod(m.key)}
                   >
                     <Ionicons name={m.icon as any} size={20} color={paymentMethod === m.key ? Tokens['on-primary'] : Tokens['on-surface-variant']} />
-                    <Text style={[styles.methodText, paymentMethod === m.key && styles.methodTextActive]}>{m.label}</Text>
+                    <Text style={[styles.methodText, paymentMethod === m.key && styles.methodTextActive]}>{t('paymentMethods.' + m.key)}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
             </View>
 
             <View style={styles.fieldGroup}>
-              <Text style={styles.label}>Reference (optional)</Text>
+              <Text style={styles.label}>{t('bill.reference')}</Text>
               <TextInput
                 style={styles.input}
                 value={reference}
                 onChangeText={setReference}
-                placeholder="UTR number, cheque no, etc."
+                placeholder={t('bill.referencePlaceholder')}
                 placeholderTextColor={Tokens['on-surface-variant']}
               />
             </View>
 
             <View style={styles.fieldGroup}>
-              <Text style={styles.label}>Notes (optional)</Text>
+              <Text style={styles.label}>{t('common.notes')}</Text>
               <TextInput
                 style={[styles.input, styles.notesInput]}
                 value={notes}
                 onChangeText={setNotes}
-                placeholder="Any remarks..."
+                placeholder={t('bill.notesPlaceholder')}
                 placeholderTextColor={Tokens['on-surface-variant']}
                 multiline
                 numberOfLines={2}
@@ -152,13 +155,13 @@ export default function RecordPaymentModal() {
               ) : (
                 <>
                   <Ionicons name="checkmark-circle" size={22} color={Tokens['on-primary']} />
-                  <Text style={styles.confirmText}>Record Payment</Text>
+                  <Text style={styles.confirmText}>{t('bill.recordPaymentBtn')}</Text>
                 </>
               )}
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.cancelBtn} onPress={() => router.back()}>
-              <Text style={styles.cancelText}>Cancel</Text>
+              <Text style={styles.cancelText}>{t('common.cancel')}</Text>
             </TouchableOpacity>
           </ScrollView>
         </View>

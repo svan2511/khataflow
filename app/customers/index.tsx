@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { View, Text, TouchableOpacity, ScrollView, TextInput, StyleSheet, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
@@ -17,6 +18,7 @@ export default function CustomersListScreen() {
   const [customers, setCustomers] = useState<CustomerData[]>([]);
   const [loading, setLoading] = useState(true);
   const [totalUdhaar, setTotalUdhaar] = useState(0);
+  const { t } = useTranslation();
 
   const fetchCustomers = useCallback(async () => {
     if (!token) return;
@@ -60,13 +62,13 @@ export default function CustomersListScreen() {
             <Ionicons name="menu" size={22} color={Tokens.secondary} />
           </TouchableOpacity>
           <View>
-            <Text style={styles.topTitle}>{isCreditFilter ? 'Outstanding Customers' : 'Customers'}</Text>
-            <Text style={styles.topSubtitle}>{isCreditFilter ? `${visibleCustomers.length} with balance` : `${customers.length} customers`}</Text>
+            <Text style={styles.topTitle}>{isCreditFilter ? t('customers.outstandingCustomers') : t('customers.title')}</Text>
+            <Text style={styles.topSubtitle}>{isCreditFilter ? `${visibleCustomers.length} ${t('customers.withBalance')}` : `${customers.length} ${t('customers.customers')}`}</Text>
           </View>
         </View>
         <TouchableOpacity style={styles.addBtn} onPress={() => router.push('/customers/add')}>
           <Ionicons name="person-add" size={18} color={Tokens['on-primary']} />
-          <Text style={styles.addText}>Add</Text>
+          <Text style={styles.addText}>{t('customers.addCustomer')}</Text>
         </TouchableOpacity>
       </View>
 
@@ -81,16 +83,16 @@ export default function CustomersListScreen() {
               <Ionicons name="people" size={18} color={Tokens.secondary} />
             </View>
             <Text style={styles.statValue}>{isCreditFilter ? visibleCustomers.length : customers.length}</Text>
-            <Text style={styles.statLabel}>{isCreditFilter ? 'With Balance' : 'Total Customers'}</Text>
+            <Text style={styles.statLabel}>{isCreditFilter ? t('customers.withBalance') : t('customers.totalCustomers')}</Text>
           </View>
           <View style={styles.statCard}>
             <View style={[styles.statIconWrap, { backgroundColor: '#fff3e0' }]}>
               <Ionicons name="arrow-down" size={18} color="#e65100" />
             </View>
             <Text style={[styles.statValue, { color: '#e65100' }]}>
-              ₹{totalUdhaar.toLocaleString('en-IN')}
+              ₹{Number.isInteger(totalUdhaar) ? totalUdhaar.toLocaleString('en-IN') : totalUdhaar.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </Text>
-            <Text style={styles.statLabel}>Outstanding Amount</Text>
+            <Text style={styles.statLabel}>{t('customers.outstandingAmount')}</Text>
           </View>
           {!isCreditFilter && (
             <View style={styles.statCard}>
@@ -98,7 +100,7 @@ export default function CustomersListScreen() {
                 <Ionicons name="checkmark-circle" size={18} color="#2e7d32" />
               </View>
               <Text style={[styles.statValue, { color: '#2e7d32' }]}>{settledCount}</Text>
-              <Text style={styles.statLabel}>Settled</Text>
+              <Text style={styles.statLabel}>{t('customers.settled')}</Text>
             </View>
           )}
         </View>
@@ -108,7 +110,7 @@ export default function CustomersListScreen() {
             <Ionicons name="search" size={20} color={Tokens.outline} />
             <TextInput
               style={styles.searchInput}
-              placeholder="Search by name or phone number..."
+              placeholder={t('customers.searchCustomers')}
               placeholderTextColor={Tokens.outline}
               value={search}
               onChangeText={setSearch}
@@ -123,9 +125,9 @@ export default function CustomersListScreen() {
             {visibleCustomers.length === 0 ? (
               <View style={styles.emptyState}>
                 <Ionicons name="people-outline" size={48} color={Tokens.outline} />
-                <Text style={styles.emptyTitle}>{isCreditFilter ? 'No outstanding customers' : 'No customers found'}</Text>
+                <Text style={styles.emptyTitle}>{isCreditFilter ? t('customers.noOutstanding') : t('customers.noCustomersYet')}</Text>
                 <Text style={styles.emptySub}>
-                  {isCreditFilter ? 'All balances are settled.' : 'Add your first customer to get started.'}
+                  {isCreditFilter ? t('customers.allSettled') : t('customers.addFirstCustomer')}
                 </Text>
               </View>
             ) : (
@@ -145,16 +147,16 @@ export default function CustomersListScreen() {
                       </View>
                       <View style={styles.cardInfo}>
                         <Text style={styles.customerName}>{c.name}</Text>
-                        <Text style={styles.customerPhone}>{c.phone || 'No phone'}</Text>
+                        <Text style={styles.customerPhone}>{c.phone || t('customers.noPhone')}</Text>
                       </View>
                       <View style={styles.cardRight}>
                         <Text style={[
                           styles.balanceAmount,
                           credit > 0 && { color: Tokens.error },
                         ]}>
-                          ₹ {credit.toLocaleString('en-IN')}
+                          ₹ {Number.isInteger(credit) ? credit.toLocaleString('en-IN') : credit.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </Text>
-                        <Text style={styles.balanceLabel}>{credit > 0 ? 'Outstanding' : 'Settled'}</Text>
+                        <Text style={styles.balanceLabel}>{credit > 0 ? t('customers.outstanding') : t('customers.settled')}</Text>
                       </View>
                     </View>
                   </TouchableOpacity>

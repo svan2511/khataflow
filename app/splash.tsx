@@ -4,11 +4,13 @@ import { Redirect } from 'expo-router';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, withDelay, withSpring, Easing } from 'react-native-reanimated';
 import { Tokens, Typography, Spacing, BorderRadius } from '@/constants/theme';
 import { useAuth } from '@/lib/auth-context';
+import { useTranslation } from 'react-i18next';
 
 const { width } = Dimensions.get('window');
 
 export default function SplashScreen() {
   const { token, user, isLoading } = useAuth();
+  const { t } = useTranslation();
   const canNavigateRef = useRef(false);
   const [ready, setReady] = useState(false);
 
@@ -94,18 +96,18 @@ export default function SplashScreen() {
       </Animated.View>
 
       <Animated.View style={[styles.tagBlock, tagStyle]}>
-        <Text style={styles.tagline}>Smart dukan Smart hisaab</Text>
+        <Text style={styles.tagline}>{t('splash.tagline')}</Text>
       </Animated.View>
 
       <Animated.View style={[styles.footer, footerStyle]}>
-        <Text style={styles.version}>v2.0.4 • Premium Member Edition</Text>
+        <Text style={styles.version}>{t('splash.version')}</Text>
       </Animated.View>
 
       {ready && canNavigateRef.current && (
         token && user ? (
           user.has_shop ? <Redirect href="/(tabs)" /> : <Redirect href="/shop-setup" />
         ) : (
-          <Redirect href="/login" />
+          <Redirect href="/language-select" />
         )
       )}
     </View>

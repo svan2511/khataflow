@@ -4,9 +4,11 @@ import { Spacing, Tokens } from '@/constants/theme';
 import type { UserProfileData } from '@/lib/api';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth-context';
+import { changeLanguage, getCurrentLanguage, getLanguageLabel } from '@/lib/i18n';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Image, Linking, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -30,12 +32,6 @@ const settingsMenu = [
     route: 'printers' as const,
   },
   {
-    icon: 'language-outline' as const,
-    title: 'Language',
-    subtitle: 'English, Hindi, Marathi & more',
-    route: 'language' as const,
-  },
-  {
     icon: 'help-circle-outline' as const,
     title: 'Help',
     subtitle: 'Contact support and tutorials',
@@ -48,6 +44,8 @@ export default function SettingsScreen() {
   const [loading, setLoading] = useState(true);
   const { token, signOut } = useAuth();
   const { showToast } = useToast();
+  const { t, i18n } = useTranslation();
+  const [currentLng, setCurrentLng] = useState(getCurrentLanguage());
 
   const fetchProfile = useCallback(async () => {
     try {
@@ -69,11 +67,17 @@ export default function SettingsScreen() {
   const handleSettingsPress = (route: string) => {
     if (route === 'help') {
       Linking.openURL('mailto:support@dukaansahayak.app').catch(() => {
-        showToast({ type: 'info', title: 'Contact support', message: 'support@dukaansahayak.app' });
+        showToast({ type: 'info', title: t('settings.contactSupport'), message: 'support@dukaansahayak.app' });
       });
       return;
     }
-    showToast({ type: 'info', title: `${route === 'bill-settings' ? 'Bill Settings' : route === 'tax-gst' ? 'Tax & GST' : route === 'printers' ? 'Printers' : 'Language'} coming soon` });
+    showToast({ type: 'info', title: t('settings.comingSoon') });
+  };
+
+  const toggleLanguage = async () => {
+    const newLng = currentLng === 'hi' ? 'en' : 'hi';
+    await changeLanguage(newLng);
+    setCurrentLng(newLng);
   };
 
   if (loading) {
@@ -93,7 +97,6 @@ export default function SettingsScreen() {
         <TouchableOpacity style={styles.topBtn} onPress={() => router.back()}>
           <Ionicons name="arrow-back" size={24} color={Tokens.secondary} />
         </TouchableOpacity>
-        {/* <Text style={styles.topTitle}>KhataFlow</Text> */}
         <TouchableOpacity style={styles.topBtn}>
           <Ionicons name="sync" size={24} color={Tokens.secondary} />
         </TouchableOpacity>
@@ -104,7 +107,7 @@ export default function SettingsScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.pageTitle}>Settings</Text>
+        <Text style={styles.pageTitle}>{t('settings.title')}</Text>
 
         <TouchableOpacity
           style={styles.profileCard}
@@ -119,7 +122,7 @@ export default function SettingsScreen() {
             )}
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={styles.profileName}>{shop?.shop_name || 'Your Shop'}</Text>
+            <Text style={styles.profileName}>{shop?.shop_name || t('common.yourShop')}</Text>
             {shop?.owner_name && (
               <Text style={styles.profilePhone}>{shop.owner_name}</Text>
             )}
@@ -148,12 +151,27 @@ export default function SettingsScreen() {
               <Ionicons name="chevron-forward" size={20} color={Tokens.outline} />
             </TouchableOpacity>
           ))}
+
+          <TouchableOpacity
+            style={styles.settingsCard}
+            activeOpacity={0.9}
+            onPress={toggleLanguage}
+          >
+            <View style={styles.settingsIcon}>
+              <Ionicons name="language-outline" size={28} color={Tokens.secondary} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.settingsTitle}>{t('settings.language')}</Text>
+              <Text style={styles.settingsSubtitle} numberOfLines={1}>{getLanguageLabel(currentLng)}</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={Tokens.outline} />
+          </TouchableOpacity>
         </View>
 
         <View style={styles.signOutSection}>
           <TouchableOpacity style={styles.signOutBtn} onPress={() => signOut()}>
             <Ionicons name="log-out-outline" size={20} color={Tokens['on-error']} />
-            <Text style={styles.signOutText}>Sign Out</Text>
+            <Text style={styles.signOutText}>{t('settings.signOut')}</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>

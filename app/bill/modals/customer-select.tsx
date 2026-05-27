@@ -8,8 +8,10 @@ import { useAuth } from '@/lib/auth-context';
 import { useToast } from '@/components/toast-provider';
 import { api, type CustomerData } from '@/lib/api';
 import Loader from '@/components/Loader';
+import { useTranslation } from 'react-i18next';
 
 export default function CustomerSelectModal() {
+  const { t } = useTranslation();
   const [search, setSearch] = useState('');
   const [customers, setCustomers] = useState<CustomerData[]>([]);
   const [loading, setLoading] = useState(false);
@@ -66,9 +68,9 @@ export default function CustomerSelectModal() {
       setCustomer({ uuid: res.data.id, name: res.data.name, phone: res.data.phone || undefined });
       router.back();
     } catch (e: any) {
-      const msg = e?.message || 'Failed to create customer';
+      const msg = e?.message || t('customers.failedSaveCustomer');
       setError(msg);
-      showToast({ type: 'error', title: 'Error', message: msg });
+      showToast({ type: 'error', title: t('common.error'), message: msg });
     } finally {
       setAdding(false);
     }
@@ -81,7 +83,7 @@ export default function CustomerSelectModal() {
         <View style={styles.sheet}>
           <View style={styles.handle} />
           <View style={styles.header}>
-            <Text style={styles.title}>Select Customer</Text>
+            <Text style={styles.title}>{t('bill.selectCustomer')}</Text>
             <TouchableOpacity onPress={() => router.back()} style={styles.closeBtn}>
               <Ionicons name="close" size={24} color={Tokens['on-surface-variant']} />
             </TouchableOpacity>
@@ -93,7 +95,7 @@ export default function CustomerSelectModal() {
                 <Ionicons name="search" size={20} color={Tokens['on-surface-variant']} />
                 <TextInput
                   style={styles.searchInput}
-                  placeholder="Search by name or phone..."
+                  placeholder={t('bill.searchCustomers')}
                   placeholderTextColor={Tokens['on-surface-variant']}
                   value={search}
                   onChangeText={setSearch}
@@ -107,8 +109,8 @@ export default function CustomerSelectModal() {
                   <Ionicons name="person" size={24} color={!customer ? Tokens['on-primary'] : Tokens['on-surface-variant']} />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={[styles.optionLabel, !customer && styles.optionLabelActive]}>Walk-in Customer</Text>
-                  <Text style={styles.optionDesc}>No name or phone needed</Text>
+                  <Text style={[styles.optionLabel, !customer && styles.optionLabelActive]}>{t('common.walkInCustomer')}</Text>
+                  <Text style={styles.optionDesc}>{t('bill.walkInSubtitle')}</Text>
                 </View>
                 {!customer && <Ionicons name="checkmark-circle" size={22} color={Tokens['primary-container']} />}
               </TouchableOpacity>
@@ -125,10 +127,10 @@ export default function CustomerSelectModal() {
                     </View>
                     <View style={{ flex: 1 }}>
                       <Text style={styles.optionLabel}>{c.name}</Text>
-                      <Text style={styles.optionDesc}>{c.phone || 'No phone'}</Text>
+                      <Text style={styles.optionDesc}>{c.phone || t('bill.noPhone')}</Text>
                     </View>
                     <Text style={[styles.dueText, { color: c.total_credit > 0 ? Tokens.tertiary : Tokens.secondary }]}>
-                      {c.total_credit > 0 ? `Due: ₹${c.total_credit}` : 'No dues'}
+                      {c.total_credit > 0 ? t('customers.dueLabel') + ': ₹' + c.total_credit : t('customers.noBalance')}
                     </Text>
                   </TouchableOpacity>
                 ))}
@@ -136,17 +138,17 @@ export default function CustomerSelectModal() {
 
               <TouchableOpacity style={styles.addNewBtn} onPress={() => { setShowQuickAdd(true); setError(''); }}>
                 <Ionicons name="person-add" size={20} color={Tokens.secondary} />
-                <Text style={styles.addNewText}>Add New Customer</Text>
+                <Text style={styles.addNewText}>{t('bill.addNewCustomer')}</Text>
               </TouchableOpacity>
             </>
           ) : (
             <>
               <View style={styles.form}>
                 <View>
-                  <Text style={styles.label}>Customer Name</Text>
+                  <Text style={styles.label}>{t('bill.customerName')}</Text>
                   <TextInput
                     style={styles.input}
-                    placeholder="Enter name"
+                    placeholder={t('bill.customerNamePlaceholder')}
                     placeholderTextColor={Tokens['on-surface-variant']}
                     value={quickName}
                     onChangeText={setQuickName}
@@ -154,10 +156,10 @@ export default function CustomerSelectModal() {
                   />
                 </View>
                 <View>
-                  <Text style={styles.label}>Phone (optional)</Text>
+                  <Text style={styles.label}>{t('customers.mobileNumber')}</Text>
                   <TextInput
                     style={styles.input}
-                    placeholder="Enter phone number"
+                    placeholder={t('bill.customerPhonePlaceholder')}
                     placeholderTextColor={Tokens['on-surface-variant']}
                     value={quickPhone}
                     onChangeText={setQuickPhone}
@@ -176,12 +178,12 @@ export default function CustomerSelectModal() {
                   ) : (
                     <>
                       <Ionicons name="checkmark" size={22} color={Tokens['on-primary']} />
-                      <Text style={styles.addBtnText}>Add & Select</Text>
+                      <Text style={styles.addBtnText}>{t('bill.addAndSelect')}</Text>
                     </>
                   )}
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.cancelBtn} onPress={() => setShowQuickAdd(false)}>
-                  <Text style={styles.cancelText}>Back to Search</Text>
+                  <Text style={styles.cancelText}>{t('bill.backToSearch')}</Text>
                 </TouchableOpacity>
               </View>
             </>

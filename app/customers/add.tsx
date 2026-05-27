@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { View, Text, TouchableOpacity, ScrollView, TextInput, StyleSheet, ActivityIndicator, KeyboardAvoidingView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -13,6 +14,7 @@ export default function AddEditCustomerScreen() {
   const { id, returnTo } = useLocalSearchParams<{ id?: string; returnTo?: string }>();
   const isEditing = !!id;
   const { showToast } = useToast();
+  const { t } = useTranslation();
   const [fullName, setFullName] = useState('');
   const [mobile, setMobile] = useState('');
   const [saving, setSaving] = useState(false);
@@ -29,7 +31,7 @@ export default function AddEditCustomerScreen() {
       setFullName(res.data.name);
       setMobile(res.data.phone || '');
     } catch (e: any) {
-      showToast({ type: 'error', title: 'Error', message: 'Failed to load customer' });
+      showToast({ type: 'error', title: t('common.error'), message: t('customers.loadFailed') });
       router.back();
     } finally {
       setLoading(false);
@@ -39,7 +41,7 @@ export default function AddEditCustomerScreen() {
   const handleSave = async () => {
     if (!token) return;
     if (!fullName.trim()) {
-      showToast({ type: 'error', title: 'Validation', message: 'Customer name is required.' });
+      showToast({ type: 'error', title: t('common.validation'), message: t('customers.nameRequired') });
       return;
     }
 
@@ -50,14 +52,14 @@ export default function AddEditCustomerScreen() {
           name: fullName.trim(),
           phone: mobile.trim() || undefined,
         });
-        showToast({ type: 'success', title: 'Success', message: 'Customer updated.' });
+        showToast({ type: 'success', title: t('common.success'), message: t('customers.updatedSuccess') });
         router.back();
       } else {
         const res = await api.createCustomer(token, {
           name: fullName.trim(),
           phone: mobile.trim() || undefined,
         });
-        showToast({ type: 'success', title: 'Success', message: 'Customer added.' });
+        showToast({ type: 'success', title: t('common.success'), message: t('customers.savedSuccess') });
         if (returnTo === 'bill') {
           (router as any).replace({
             pathname: '/bill/items',
@@ -72,7 +74,7 @@ export default function AddEditCustomerScreen() {
         }
       }
     } catch (e: any) {
-      showToast({ type: 'error', title: 'Error', message: e.message || 'Failed to save customer' });
+      showToast({ type: 'error', title: t('common.error'), message: e.message || t('customers.saveFailed') });
     } finally {
       setSaving(false);
     }
@@ -93,7 +95,7 @@ export default function AddEditCustomerScreen() {
           <TouchableOpacity style={styles.topBtn} onPress={() => router.back()}>
             <Ionicons name="arrow-back" size={22} color={Tokens.secondary} />
           </TouchableOpacity>
-          <Text style={styles.topTitle}>{isEditing ? 'Edit Customer' : 'Add Customer'}</Text>
+          <Text style={styles.topTitle}>{isEditing ? t('customers.editCustomer') : t('customers.addCustomer')}</Text>
         </View>
       </View>
 
@@ -110,15 +112,15 @@ export default function AddEditCustomerScreen() {
       >
         <View style={styles.formCard}>
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Customer Identity</Text>
+            <Text style={styles.sectionTitle}>{t('customers.customerIdentity')}</Text>
 
             <View style={styles.fieldGroup}>
-              <Text style={styles.label}>Full Name <Text style={styles.required}>*</Text></Text>
+              <Text style={styles.label}>{t('customers.customerName')} <Text style={styles.required}>*</Text></Text>
               <View style={styles.inputWrapper}>
                 <Ionicons name="id-card-outline" size={18} color={Tokens.outline} style={styles.inputIcon} />
                 <TextInput
                   style={styles.input}
-                  placeholder="e.g. Ramesh Kumar"
+                  placeholder={t('customers.customerNamePlaceholder')}
                   placeholderTextColor={Tokens['outline-variant']}
                   value={fullName}
                   onChangeText={setFullName}
@@ -127,7 +129,7 @@ export default function AddEditCustomerScreen() {
             </View>
 
             <View style={styles.fieldGroup}>
-              <Text style={styles.label}>Mobile Number</Text>
+              <Text style={styles.label}>{t('customers.phoneNumber')}</Text>
               <View style={styles.phoneRow}>
                 <View style={styles.countryCode}>
                   <Text style={styles.countryCodeText}>+91</Text>
@@ -136,7 +138,7 @@ export default function AddEditCustomerScreen() {
                   <Ionicons name="call-outline" size={18} color={Tokens.outline} style={styles.phoneIcon} />
                   <TextInput
                     style={styles.phoneInput}
-                    placeholder="9876543210"
+                    placeholder={t('customers.phonePlaceholder')}
                     placeholderTextColor={Tokens['outline-variant']}
                     keyboardType="phone-pad"
                     maxLength={10}
@@ -158,7 +160,7 @@ export default function AddEditCustomerScreen() {
             ) : (
               <>
                 <Ionicons name="save" size={20} color={Tokens['on-primary']} />
-                <Text style={styles.saveBtnText}>{isEditing ? 'Update Customer' : 'Save Customer'}</Text>
+                <Text style={styles.saveBtnText}>{isEditing ? t('customers.updateCustomer') : t('customers.save')}</Text>
               </>
             )}
           </TouchableOpacity>

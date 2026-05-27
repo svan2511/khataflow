@@ -8,8 +8,10 @@ import { useBill } from '@/lib/bill-context';
 import { useAuth } from '@/lib/auth-context';
 import { api, type ProductData } from '@/lib/api';
 import Loader from '@/components/Loader';
+import { useTranslation } from 'react-i18next';
 
 export default function ProductSearchScreen() {
+  const { t } = useTranslation();
   const [query, setQuery] = useState('');
   const [products, setProducts] = useState<ProductData[]>([]);
   const [loading, setLoading] = useState(false);
@@ -59,10 +61,10 @@ export default function ProductSearchScreen() {
         <TouchableOpacity style={styles.iconButton} onPress={() => router.back()}>
           <Ionicons name="arrow-back" size={24} color={Tokens['on-surface-variant']} />
         </TouchableOpacity>
-        <Text style={styles.topBarTitle}>Products</Text>
+        <Text style={styles.topBarTitle}>{t('bill.productSearch')}</Text>
         <TouchableOpacity style={styles.addNewBtn} onPress={() => (router as any).push('/bill/modals/quick-add')}>
           <Ionicons name="add-circle-outline" size={18} color={Tokens.secondary} />
-          <Text style={styles.addNewText}>Add New</Text>
+          <Text style={styles.addNewText}>{t('bill.addNew')}</Text>
         </TouchableOpacity>
       </View>
 
@@ -71,7 +73,7 @@ export default function ProductSearchScreen() {
           <Ionicons name="search" size={20} color={Tokens['on-surface-variant']} />
           <TextInput
             style={styles.searchInput}
-            placeholder="Search products..."
+            placeholder={t('bill.searchProducts')}
             placeholderTextColor={Tokens['on-surface-variant']}
             value={query}
             onChangeText={setQuery}
@@ -86,13 +88,13 @@ export default function ProductSearchScreen() {
       {searching && (
         <View style={styles.loadingRow}>
           <Loader size={18} color={Tokens.secondary} />
-          <Text style={styles.loadingText}>Searching...</Text>
+          <Text style={styles.loadingText}>{t('bill.searching')}</Text>
         </View>
       )}
 
       {!searching && query.length > 0 && products.length === 0 && (
         <View style={styles.resultInfo}>
-          <Text style={styles.resultCount}>No results for "{query}"</Text>
+          <Text style={styles.resultCount}>{t('bill.noResults', { query })}</Text>
         </View>
       )}
 
@@ -114,13 +116,13 @@ export default function ProductSearchScreen() {
                 {product.stock_quantity > 0 ? (
                   <>
                     <Ionicons name="checkmark-circle" size={14} color={Tokens.secondary} />
-                    <Text style={styles.inStock}>In Stock</Text>
+                    <Text style={styles.inStock}>{t('bill.inStock')}</Text>
                     <Text style={styles.stockQty}>| {product.stock_quantity} {product.unit}</Text>
                   </>
                 ) : (
                   <>
                     <Ionicons name="remove-circle" size={14} color={Tokens['on-surface-variant']} />
-                    <Text style={styles.outOfStock}>Out of Stock</Text>
+                    <Text style={styles.outOfStock}>{t('bill.outOfStock')}</Text>
                   </>
                 )}
               </View>

@@ -1,6 +1,6 @@
-//const API_BASE = 'http://192.168.1.9:8000/api';
+const API_BASE = 'http://192.168.1.9:8000/api';
 
-const API_BASE = 'https://khata-flow-api.onrender.com/api';
+//const API_BASE = 'https://khata-flow-api.onrender.com/api';
 
 export interface ApiResponse<T = any> {
   success: boolean;
@@ -50,6 +50,8 @@ export interface ShopData {
 
 export interface DashboardData {
   today_sales: number;
+  today_credit: number;
+  today_cash: number;
   total_credit: number;
   low_stock_count: number;
   today_bills_count: number;
@@ -245,6 +247,23 @@ export interface MonthlyReport {
     sales_growth_percentage: number;
     bills_growth_percentage: number;
   };
+}
+
+export interface CustomRangeReport {
+  start_date: string;
+  end_date: string;
+  total_sales: number;
+  total_bills: number;
+  total_credit: number;
+  payment_breakdown: {
+    cash: number; upi: number; card: number; mix: number; credit: number;
+  };
+  top_products: Array<{
+    product_name: string;
+    total_quantity: number;
+    total_revenue: number;
+    unit: string;
+  }>;
 }
 
 // ─── Phase 3: Expense types ────────────────────────────────────────
@@ -546,6 +565,11 @@ export const api = {
     if (month) params.set('month', String(month));
     const query = params.toString() ? '?' + params.toString() : '';
     return request<MonthlyReport>('/reports/monthly' + query, {}, token);
+  },
+
+  getCustomRangeReport(token: string, startDate: string, endDate: string) {
+    const query = `?start_date=${startDate}&end_date=${endDate}`;
+    return request<CustomRangeReport>('/reports/daily' + query, {}, token);
   },
 
   // ─── Phase 3: Expenses ───────────────────────────────────────────

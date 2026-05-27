@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   ScrollView, KeyboardAvoidingView,
@@ -19,6 +20,7 @@ export default function EditProfileScreen() {
   const { token, user, setUser } = useAuth();
   const { showToast } = useToast();
   const insets = useSafeAreaInsets();
+  const { t } = useTranslation();
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -110,10 +112,10 @@ export default function EditProfileScreen() {
         setUser(response.data.user);
       }
 
-      showToast({ type: 'success', title: 'Profile updated successfully', duration: 1500 });
+      showToast({ type: 'success', title: t('profile.savedSuccess'), duration: 1500 });
       setTimeout(() => router.back(), 200);
     } catch (err: any) {
-      showToast({ type: 'error', title: 'Failed to update profile', message: err.message });
+      showToast({ type: 'error', title: t('profile.saveFailed'), message: err.message });
     } finally {
       setSaving(false);
     }
@@ -143,7 +145,7 @@ export default function EditProfileScreen() {
           <TouchableOpacity onPress={() => router.back()} style={styles.topBarButton}>
             <Ionicons name="close" size={24} color={Tokens['on-surface']} />
           </TouchableOpacity>
-          <Text style={styles.topBarTitle}>Edit Profile</Text>
+          <Text style={styles.topBarTitle}>{t('profile.title')}</Text>
           <View style={styles.topBarButton} />
         </View>
 
@@ -168,12 +170,12 @@ export default function EditProfileScreen() {
 
         <View style={styles.form}>
           <View style={styles.fieldGroup}>
-            <Text style={styles.label}>Shop Name</Text>
+            <Text style={styles.label}>{t('profile.shopName')}</Text>
             <View style={styles.inputWrapper}>
               <Ionicons name="storefront-outline" size={18} color={Tokens['on-surface-variant']} style={styles.inputIcon} />
               <TextInput
                 style={styles.input}
-                placeholder="Shop name"
+                placeholder={t('profile.shopNamePlaceholder')}
                 placeholderTextColor={Tokens.outline}
                 value={shopName}
                 onChangeText={setShopName}
@@ -182,12 +184,12 @@ export default function EditProfileScreen() {
           </View>
 
           <View style={styles.fieldGroup}>
-            <Text style={styles.label}>Owner Name</Text>
+            <Text style={styles.label}>{t('profile.ownerName')}</Text>
             <View style={styles.inputWrapper}>
               <Ionicons name="person-outline" size={18} color={Tokens['on-surface-variant']} style={styles.inputIcon} />
               <TextInput
                 style={styles.input}
-                placeholder="Owner name"
+                placeholder={t('profile.ownerNamePlaceholder')}
                 placeholderTextColor={Tokens.outline}
                 value={ownerName}
                 onChangeText={setOwnerName}
@@ -212,12 +214,12 @@ export default function EditProfileScreen() {
           </View>
 
           <View style={styles.fieldGroup}>
-            <Text style={styles.label}>Address</Text>
+            <Text style={styles.label}>{t('profile.address')}</Text>
             <View style={styles.inputWrapper}>
               <Ionicons name="location-outline" size={18} color={Tokens['on-surface-variant']} style={styles.inputIcon} />
               <TextInput
                 style={[styles.input, styles.textarea]}
-                placeholder="Complete address"
+                placeholder={t('profile.addressPlaceholder')}
                 placeholderTextColor={Tokens.outline}
                 multiline
                 numberOfLines={3}
@@ -282,7 +284,7 @@ export default function EditProfileScreen() {
             ) : (
               <>
                 <Ionicons name="checkmark-circle" size={20} color={Tokens['on-primary']} />
-                <Text style={styles.saveButtonText}>Save Changes</Text>
+                <Text style={styles.saveButtonText}>{t('profile.save')}</Text>
               </>
             )}
           </TouchableOpacity>

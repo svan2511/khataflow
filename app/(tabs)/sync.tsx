@@ -10,24 +10,25 @@ import FullScreenLoader from '@/components/FullScreenLoader';
 import { useAuth } from '@/lib/auth-context';
 import { api, type SyncStatusData } from '@/lib/api';
 import { useToast } from '@/components/toast-provider';
+import { useTranslation } from 'react-i18next';
 
 const SYNC_CACHE_KEY = 'sync_status_cache';
 
-function formatTime(isoString: string): string {
+function formatTime(t: any, isoString: string): string {
   try {
     const d = new Date(isoString);
     const now = new Date();
     const diffMs = now.getTime() - d.getTime();
     const diffMin = Math.floor(diffMs / 60000);
 
-    if (diffMin < 1) return 'Just now';
-    if (diffMin < 60) return `${diffMin}m ago`;
+    if (diffMin < 1) return t('sync.justNow');
+    if (diffMin < 60) return t('sync.minAgo', { count: diffMin });
 
     const diffHrs = Math.floor(diffMin / 60);
-    if (diffHrs < 24) return `${diffHrs}h ago`;
+    if (diffHrs < 24) return t('sync.hourAgo', { count: diffHrs });
 
     const diffDays = Math.floor(diffHrs / 24);
-    if (diffDays < 7) return `${diffDays}d ago`;
+    if (diffDays < 7) return t('sync.dayAgo', { count: diffDays });
 
     return d.toLocaleDateString([], { day: 'numeric', month: 'short' });
   } catch {
@@ -42,6 +43,7 @@ export default function SyncScreen() {
   const [isOnline, setIsOnline] = useState(true);
   const { token } = useAuth();
   const { showToast } = useToast();
+  const { t } = useTranslation();
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const fetchSyncStatus = useCallback(async (showLoader = false) => {
@@ -54,12 +56,12 @@ export default function SyncScreen() {
       setIsOnline(true);
       await SecureStore.setItemAsync(SYNC_CACHE_KEY, JSON.stringify(response.data));
       if (showLoader) {
-        showToast({ type: 'success', title: 'Sync completed', duration: 1500 });
+        showToast({ type: 'success', title: t('sync.syncCompleted'), duration: 1500 });
       }
     } catch {
       setIsOnline(false);
       if (showLoader) {
-        showToast({ type: 'error', title: 'Sync failed', message: 'Check your internet connection' });
+        showToast({ type: 'error', title: t('sync.syncFailed'), message: t('sync.connectionIssue') });
       }
       // try loading from cache
       try {
@@ -130,10 +132,8 @@ export default function SyncScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.headerSection}>
-          <Text style={styles.headerTitle}>Data Synchronization</Text>
-          <Text style={styles.headerSub}>
-            Keep your shop's data backed up and up-to-date across all devices.
-          </Text>
+          <Text style={styles.headerTitle}>{t('sync.dataSync')}</Text>
+          <Text style={styles.headerSub}>{t('sync.dataSyncSub')}</Text>
         </View>
 
         <View style={styles.grid}>
@@ -154,22 +154,22 @@ export default function SyncScreen() {
 
               <Text style={styles.statusText}>
                 {syncing
-                  ? 'Syncing Data...'
+                  ? t('sync.syncingData')
                   : !isOnline
-                    ? 'You are offline'
+                    ? t('sync.youAreOffline')
                     : syncStatus?.is_synced
-                      ? 'All Data Synced'
-                      : 'Pending sync'}
+                      ? t('sync.allDataSynced')
+                      : t('sync.pendingSync')}
               </Text>
 
               <Text style={styles.statusTime}>
                 {syncing
-                  ? 'Please wait, do not close the app.'
+                  ? t('sync.pleaseWait')
                   : !isOnline
-                    ? 'Changes will sync when online'
+                    ? t('sync.changesWillSync')
                     : syncStatus?.last_synced_at
-                      ? `Last synced: ${formatTime(syncStatus.last_synced_at)}`
-                      : 'No sync data yet'}
+                      ? t('sync.lastSynced', { time: formatTime(t, syncStatus.last_synced_at) })
+                      : t('sync.noSyncData')}
               </Text>
 
               <TouchableOpacity
@@ -184,7 +184,7 @@ export default function SyncScreen() {
                   <Ionicons name="sync" size={20} color={Tokens['on-primary']} />
                 )}
                 <Text style={styles.syncBtnText}>
-                  {syncing ? 'Syncing...' : 'Sync Now'}
+                  {syncing ? t('sync.syncing') : t('sync.syncNow')}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -202,12 +202,12 @@ export default function SyncScreen() {
                 />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.sideLabel}>Pending Items</Text>
+                <Text style={styles.sideLabel}>{t('sync.pendingItems')}</Text>
                 <Text style={styles.sideValue}>
-                  {pendingCount} <Text style={styles.sideUnit}>records</Text>
+                  {pendingCount} <Text style={styles.sideUnit}>{t('sync.records')}</Text>
                 </Text>
                 {pendingCount > 0 && (
-                  <Text style={styles.sideHint}>Sync to backup data</Text>
+                  <Text style={styles.sideHint}>{t('sync.syncToBackup')}</Text>
                 )}
               </View>
             </View>
@@ -223,11 +223,11 @@ export default function SyncScreen() {
                 />
               </View>
               <View>
-                <Text style={styles.sideLabel}>Connection</Text>
+                <Text style={styles.sideLabel}>{t('sync.connection')}</Text>
                 <Text style={[styles.sideValue, {
                   color: isOnline ? Tokens['on-surface'] : Tokens.error,
                 }]}>
-                  {isOnline ? 'Online' : 'Offline'}
+                  {isOnline ? t('sync.online') : t('sync.offline')}
                 </Text>
               </View>
             </View>

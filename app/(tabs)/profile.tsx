@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import FullScreenLoader from '@/components/FullScreenLoader';
 import { BorderRadius, Spacing, Tokens, Typography } from '@/constants/theme';
 import type { UserProfileData } from '@/lib/api';
@@ -13,6 +14,7 @@ export default function ProfileScreen() {
   const [profile, setProfile] = useState<UserProfileData | null>(null);
   const [loading, setLoading] = useState(true);
   const { token } = useAuth();
+  const { t } = useTranslation();
 
   const fetchProfile = useCallback(async () => {
     try {
@@ -65,7 +67,7 @@ export default function ProfileScreen() {
               <Ionicons name="storefront" size={48} color={Tokens['on-surface-variant']} style={{ opacity: 0.3 }} />
             )}
           </View>
-          <Text style={styles.shopName}>{shop?.shop_name || 'Your Shop'}</Text>
+          <Text style={styles.shopName}>{shop?.shop_name || t('common.yourShop')}</Text>
           {shop?.owner_name && (
             <Text style={styles.ownerName}>{shop.owner_name} • Proprietor</Text>
           )}
@@ -81,7 +83,7 @@ export default function ProfileScreen() {
               <View style={styles.infoIconBox}>
                 <Ionicons name="call" size={20} color={Tokens.secondary} />
               </View>
-              <Text style={styles.infoLabel}>REGISTERED MOBILE</Text>
+                <Text style={styles.infoLabel}>{t('profile.phone')}</Text>
             </View>
             <Text style={styles.infoValue}>+91 {user?.phone}</Text>
           </View>
@@ -116,7 +118,7 @@ export default function ProfileScreen() {
         <View style={styles.actions}>
           <TouchableOpacity style={styles.editButton} activeOpacity={0.9} onPress={() => router.push('/edit-profile')}>
             <Ionicons name="create" size={20} color={Tokens['on-primary']} />
-            <Text style={styles.editButtonText}>Edit Profile</Text>
+            <Text style={styles.editButtonText}>{t('profile.editProfile')}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.helpButton} activeOpacity={0.7}>
             <Ionicons name="help-circle-outline" size={20} color={Tokens.outline} />

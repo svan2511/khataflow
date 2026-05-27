@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { View, Text, TouchableOpacity, ScrollView, TextInput, StyleSheet, ActivityIndicator, Image, Alert, KeyboardAvoidingView, Platform } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -15,6 +16,7 @@ export default function AddEditProductScreen() {
   const [loading, setLoading] = useState(isEditing);
   const [saving, setSaving] = useState(false);
   const insets = useSafeAreaInsets();
+  const { t } = useTranslation();
 
   const [productName, setProductName] = useState('');
   const [category, setCategory] = useState('');
@@ -46,7 +48,7 @@ export default function AddEditProductScreen() {
       setLowStockThreshold(p.low_stock_threshold ? String(p.low_stock_threshold) : '');
       if (p.image) setImage(p.image);
     } catch (e: any) {
-      Alert.alert('Error', 'Failed to load product');
+      Alert.alert(t('common.error'), t('inventory.loadFailed'));
       router.back();
     } finally {
       setLoading(false);
@@ -56,7 +58,7 @@ export default function AddEditProductScreen() {
   const pickImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert('Permission needed', 'Grant gallery access to upload product images.');
+      Alert.alert(t('inventory.permissionNeeded'), t('inventory.galleryPermission'));
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -73,47 +75,55 @@ export default function AddEditProductScreen() {
   const handleSave = async () => {
     if (!token) return;
     if (!productName.trim()) {
-      Alert.alert('Validation', 'Product name is required.');
+      Alert.alert(t('common.validation'), t('inventory.nameRequired'));
       return;
     }
     if (!sellingPrice || Number(sellingPrice) <= 0) {
-      Alert.alert('Validation', 'Selling price is required.');
+      Alert.alert(t('common.validation'), t('inventory.priceRequired'));
       return;
     }
 
     setSaving(true);
     try {
-      const formData = new FormData();
-      formData.append('name', productName.trim());
-      formData.append('price', sellingPrice);
-      formData.append('unit', unit);
-      if (category.trim()) formData.append('category_name', category.trim());
-      if (purchasePrice) formData.append('cost_price', purchasePrice);
-      if (openingStock) formData.append('stock_quantity', openingStock);
-      if (lowStockThreshold) formData.append('low_stock_threshold', lowStockThreshold);
-
-      if (imageFile) {
-        const filename = imageFile.fileName || 'product.jpg';
-        const ext = filename.split('.').pop() || 'jpg';
-        formData.append('image', {
-          uri: imageFile.uri,
-          type: `image/${ext}`,
-          name: filename,
-        } as any);
-      }
-
+      const formData = buildForm();
       if (isEditing && id) {
         await api.updateProductFull(token, id, formData);
       } else {
         await api.createProductFull(token, formData);
       }
-
       router.back();
     } catch (e: any) {
-      Alert.alert('Error', e.message || 'Failed to save product');
+      if (!isEditing && category.trim() && /UNIQUE|duplicate/i.test(e?.message || '')) {
+        const fallback = buildForm(true);
+        try {
+          await api.createProductFull(token, fallback);
+          router.back();
+          return;
+        } catch {}
+      }
+      const apiMsg = e?.message || '';
+      const translated = /low stock threshold/i.test(apiMsg) ? t('validation.lowStockThresholdRequired') : apiMsg;
+      Alert.alert(t('common.error'), translated || t('inventory.saveFailed'));
     } finally {
       setSaving(false);
     }
+  };
+
+  const buildForm = (skipCategory?: boolean) => {
+    const fd = new FormData();
+    fd.append('name', productName.trim());
+    fd.append('price', sellingPrice);
+    fd.append('unit', unit);
+    if (!skipCategory && category.trim()) fd.append('category_name', category.trim());
+    if (purchasePrice) fd.append('cost_price', purchasePrice);
+    if (openingStock) fd.append('stock_quantity', openingStock);
+    if (lowStockThreshold) fd.append('low_stock_threshold', lowStockThreshold);
+    if (imageFile) {
+      const filename = imageFile.fileName || 'product.jpg';
+      const ext = filename.split('.').pop() || 'jpg';
+      fd.append('image', { uri: imageFile.uri, type: `image/${ext}`, name: filename } as any);
+    }
+    return fd;
   };
 
   const units = ['pc', 'kg', 'g', 'l', 'ml', 'dozen', 'box', 'packet'];
@@ -133,7 +143,7 @@ export default function AddEditProductScreen() {
           <TouchableOpacity style={styles.topBtn} onPress={() => router.back()}>
             <Ionicons name="arrow-back" size={22} color={Tokens.secondary} />
           </TouchableOpacity>
-          <Text style={styles.topTitle}>{isEditing ? 'Edit Product' : 'Add Product'}</Text>
+          <Text style={styles.topTitle}>{isEditing ? t('inventory.editProduct') : t('inventory.addProduct')}</Text>
         </View>
       </View>
 
@@ -157,17 +167,17 @@ export default function AddEditProductScreen() {
                 <Ionicons name="camera-outline" size={36} color={Tokens['on-surface-variant']} />
               </View>
             )}
-            <Text style={styles.imageLabel}>{image ? 'Tap to change image' : 'Add Product Image'}</Text>
+            <Text style={styles.imageLabel}>{image ? t('inventory.changeImage') : t('inventory.addImage')}</Text>
           </TouchableOpacity>
 
           <View style={styles.card}>
-            <Text style={styles.cardTitle}>Core Details</Text>
+            <Text style={styles.cardTitle}>{t('inventory.coreDetails')}</Text>
 
             <View style={styles.fieldGroup}>
-              <Text style={styles.label}>Product Name <Text style={styles.required}>*</Text></Text>
+              <Text style={styles.label}>{t('inventory.productName')} <Text style={styles.required}>*</Text></Text>
               <TextInput
                 style={styles.input}
-                placeholder="e.g. Aashirvaad Atta 5kg"
+                placeholder={t('inventory.productNamePlaceholder')}
                 placeholderTextColor={Tokens.outline}
                 value={productName}
                 onChangeText={setProductName}
@@ -175,10 +185,10 @@ export default function AddEditProductScreen() {
             </View>
 
             <View style={styles.fieldGroup}>
-              <Text style={styles.label}>Category</Text>
+              <Text style={styles.label}>{t('inventory.category')}</Text>
               <TextInput
                 style={styles.input}
-                placeholder="e.g. Grocery"
+                placeholder={t('inventory.categoryPlaceholder')}
                 placeholderTextColor={Tokens.outline}
                 value={category}
                 onChangeText={setCategory}
@@ -187,11 +197,11 @@ export default function AddEditProductScreen() {
           </View>
 
           <View style={styles.card}>
-            <Text style={styles.cardTitle}>Pricing & Inventory</Text>
+            <Text style={styles.cardTitle}>{t('inventory.pricingInventory')}</Text>
 
             <View style={styles.row}>
               <View style={styles.halfField}>
-                <Text style={styles.label}>Selling Price (₹) <Text style={styles.required}>*</Text></Text>
+                <Text style={styles.label}>{t('inventory.sellingPrice')} <Text style={styles.required}>*</Text></Text>
                 <TextInput
                   style={styles.input}
                   placeholder="0.00"
@@ -202,7 +212,7 @@ export default function AddEditProductScreen() {
                 />
               </View>
               <View style={styles.halfField}>
-                <Text style={styles.label}>Purchase Price (₹)</Text>
+                <Text style={styles.label}>{t('inventory.purchasePrice')}</Text>
                 <TextInput
                   style={styles.input}
                   placeholder="0.00"
@@ -216,7 +226,7 @@ export default function AddEditProductScreen() {
 
             <View style={styles.row}>
               <View style={styles.halfField}>
-                <Text style={styles.label}>Unit <Text style={styles.required}>*</Text></Text>
+                <Text style={styles.label}>{t('inventory.unit')} <Text style={styles.required}>*</Text></Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.unitRow}>
                   {units.map(u => (
                     <TouchableOpacity
@@ -230,7 +240,7 @@ export default function AddEditProductScreen() {
                 </ScrollView>
               </View>
               <View style={styles.halfField}>
-                <Text style={styles.label}>Total Stock</Text>
+                <Text style={styles.label}>{t('inventory.totalStock')}</Text>
                 <TextInput
                   style={styles.input}
                   placeholder="0"
@@ -243,10 +253,10 @@ export default function AddEditProductScreen() {
             </View>
 
             <View style={styles.fieldGroup}>
-              <Text style={styles.label}>Low Stock Alert At</Text>
+              <Text style={styles.label}>{t('inventory.lowStockAlert')}</Text>
               <TextInput
                 style={styles.input}
-                placeholder="e.g. 5"
+                placeholder={t('inventory.lowStockPlaceholder')}
                 placeholderTextColor={Tokens.outline}
                 keyboardType="numeric"
                 value={lowStockThreshold}
@@ -263,7 +273,7 @@ export default function AddEditProductScreen() {
           ) : (
             <>
               <Ionicons name="save-outline" size={20} color={Tokens['on-primary']} />
-              <Text style={styles.saveBtnText}>{isEditing ? 'Update Product' : 'Save Product'}</Text>
+              <Text style={styles.saveBtnText}>{isEditing ? t('inventory.updateProduct') : t('inventory.save')}</Text>
             </>
           )}
         </TouchableOpacity>

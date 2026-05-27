@@ -4,6 +4,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Tokens, Typography, Spacing, BorderRadius } from '@/constants/theme';
+import { useTranslation } from 'react-i18next';
 
 type ToastType = 'success' | 'error' | 'info';
 
@@ -42,6 +43,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const opacity = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(-80)).current;
   const idRef = useRef(0);
+  const { t } = useTranslation();
 
   const showToast = useCallback((config: ToastConfig) => {
     const id = ++idRef.current;
@@ -148,7 +150,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                 onPress={() => setConfirm(null)}
                 activeOpacity={0.7}
               >
-                <Text style={styles.confirmCancelText}>{confirm.cancelText || 'Cancel'}</Text>
+                <Text style={styles.confirmCancelText}>{confirm.cancelText || t('common.cancel')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[
@@ -161,7 +163,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                 }}
                 activeOpacity={0.9}
               >
-                <Text style={styles.confirmOkText}>{confirm.confirmText || 'Confirm'}</Text>
+                <Text style={styles.confirmOkText}>{confirm.confirmText || t('common.confirm')}</Text>
               </TouchableOpacity>
             </View>
           </View>
