@@ -96,7 +96,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = useCallback(async () => {
     if (state.token) {
-      setUnauthorizedHandler(() => {});
       try {
         await api.logout(state.token);
       } catch {

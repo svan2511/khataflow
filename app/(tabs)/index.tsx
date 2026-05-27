@@ -17,11 +17,16 @@ export default function DashboardScreen() {
   const { token } = useAuth();
 
   const fetchDashboard = useCallback(async (showLoader?: boolean) => {
+    if (!token) {
+      setLoading(false);
+      setRefreshing(false);
+      return;
+    }
     if (showLoader) setLoading(true);
     try {
       const [dashRes, profileRes] = await Promise.all([
-        api.getDashboard(token!),
-        api.getProfile(token!).catch(() => null),
+        api.getDashboard(token),
+        api.getProfile(token).catch(() => null),
       ]);
       setData(dashRes.data);
       if (profileRes?.data?.shop?.shop_name) setShopName(profileRes.data.shop.shop_name);

@@ -4,12 +4,11 @@ import { Redirect } from 'expo-router';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, withDelay, withSpring, Easing } from 'react-native-reanimated';
 import { Tokens, Typography, Spacing, BorderRadius } from '@/constants/theme';
 import { useAuth } from '@/lib/auth-context';
-import { api } from '@/lib/api';
 
 const { width } = Dimensions.get('window');
 
 export default function SplashScreen() {
-  const { token, user, isLoading, setUser } = useAuth();
+  const { token, user, isLoading } = useAuth();
   const canNavigateRef = useRef(false);
   const [ready, setReady] = useState(false);
 
@@ -43,15 +42,6 @@ export default function SplashScreen() {
 
     footerFade.value = withDelay(2100, withTiming(1, { duration: 600 }));
     footerSlide.value = withDelay(2100, withTiming(0, { duration: 600 }));
-
-    if (token) {
-      api.getProfile(token).then(res => {
-        const hasShop = res.data.shop !== null;
-        if (res.data.user) {
-          setUser({ ...res.data.user, has_shop: hasShop });
-        }
-      }).catch(() => {});
-    }
 
     const animTimer = setTimeout(() => setReady(true), 3800);
     const safetyTimer = setTimeout(() => setReady(true), 5000);

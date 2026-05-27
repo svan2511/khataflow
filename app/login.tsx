@@ -19,8 +19,14 @@ export default function LoginScreen() {
   const [timer, setTimer] = useState(0);
   const otpRefs = useRef<TextInput[]>([]);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const { signIn } = useAuth();
+  const { token, user, signIn } = useAuth();
   const { showToast } = useToast();
+
+  useEffect(() => {
+    if (token && user) {
+      router.replace(user.has_shop ? '/(tabs)' : '/shop-setup');
+    }
+  }, [token, user]);
 
   const startTimer = useCallback(() => {
     if (timerRef.current) {
@@ -101,8 +107,7 @@ export default function LoginScreen() {
 
     setOtpLoading(true);
     try {
-      const signedInUser = await signIn(mobile, otpString);
-      router.replace(signedInUser.has_shop ? '/(tabs)' : '/shop-setup');
+      await signIn(mobile, otpString);
     } catch (err: any) {
       showToast({ type: 'error', title: 'OTP verification failed', message: err.message });
       setOtp(['', '', '', '']);
