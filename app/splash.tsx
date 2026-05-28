@@ -5,6 +5,7 @@ import Animated, { useSharedValue, useAnimatedStyle, withTiming, withDelay, with
 import { Tokens, Typography, Spacing, BorderRadius } from '@/constants/theme';
 import { useAuth } from '@/lib/auth-context';
 import { useTranslation } from 'react-i18next';
+import { hasStoredLanguage } from '@/lib/i18n';
 
 const { width } = Dimensions.get('window');
 
@@ -13,6 +14,7 @@ export default function SplashScreen() {
   const { t } = useTranslation();
   const canNavigateRef = useRef(false);
   const [ready, setReady] = useState(false);
+  const [languageSelected, setLanguageSelected] = useState(false);
 
   const ringScale = useSharedValue(1.4);
   const ringOpacity = useSharedValue(0);
@@ -28,6 +30,7 @@ export default function SplashScreen() {
   useEffect(() => {
     if (isLoading) return;
     canNavigateRef.current = true;
+    hasStoredLanguage().then(setLanguageSelected);
 
     logoFade.value = withTiming(1, { duration: 800 });
     logoScale.value = withSpring(1, { damping: 12, stiffness: 70, mass: 1 });
@@ -106,6 +109,8 @@ export default function SplashScreen() {
       {ready && canNavigateRef.current && (
         token && user ? (
           user.has_shop ? <Redirect href="/(tabs)" /> : <Redirect href="/shop-setup" />
+        ) : languageSelected ? (
+          <Redirect href="/login" />
         ) : (
           <Redirect href="/language-select" />
         )

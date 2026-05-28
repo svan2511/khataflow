@@ -49,6 +49,15 @@ export async function initI18n() {
   return initPromise;
 }
 
+export async function hasStoredLanguage(): Promise<boolean> {
+  try {
+    const stored = await SecureStore.getItemAsync(LANG_KEY);
+    return stored !== null;
+  } catch {
+    return false;
+  }
+}
+
 export async function changeLanguage(lng: string) {
   await i18next.changeLanguage(lng);
   try {
