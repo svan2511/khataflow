@@ -129,10 +129,10 @@ export default function DashboardScreen() {
               <Text style={styles.sectionTitle}>{t('dashboard.customersOnCredit')}</Text>
             </View>
             <View style={styles.creditList}>
-              {creditCustomers.slice(0, 3).map((c, i) => (
+              {creditCustomers.slice(0, 2).map((c, i) => (
                 <TouchableOpacity
                   key={c.id}
-                  style={[styles.creditItem, i === Math.min(creditCustomers.length, 3) - 1 && { borderBottomWidth: 0 }]}
+                  style={[styles.creditItem, i === Math.min(creditCustomers.length, 2) - 1 && { borderBottomWidth: 0 }]}
                   activeOpacity={0.7}
                   onPress={() => (router as any).push(`/customers/${c.id}`)}
                 >

@@ -67,8 +67,7 @@ export default function CustomersListScreen() {
           </View>
         </View>
         <TouchableOpacity style={styles.addBtn} onPress={() => router.push('/customers/add')}>
-          <Ionicons name="person-add" size={18} color={Tokens['on-primary']} />
-          <Text style={styles.addText}>{t('customers.addCustomer')}</Text>
+          <Ionicons name="person-add" size={20} color={Tokens.secondary} />
         </TouchableOpacity>
       </View>
 
@@ -189,10 +188,11 @@ const styles = StyleSheet.create({
   topTitle: { fontSize: 20, fontWeight: '700', color: Tokens['on-surface'], fontFamily: 'Lexend-SemiBold' },
   topSubtitle: { fontSize: 13, color: Tokens['on-surface-variant'], marginTop: 1 },
   addBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    backgroundColor: Tokens.secondary, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 999,
+    width: 40, height: 40, borderRadius: 20,
+    backgroundColor: 'transparent',
+    borderWidth: 1.5, borderColor: 'rgba(0,107,89,0.25)',
+    alignItems: 'center', justifyContent: 'center',
   },
-  addText: { fontSize: 13, fontWeight: '600', color: Tokens['on-primary'] },
   scroll: { flex: 1 },
   scrollContent: { padding: 16, paddingTop: 12, paddingBottom: 40, gap: 14 },
   statsRow: { flexDirection: 'row', gap: 10 },

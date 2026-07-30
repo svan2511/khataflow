@@ -103,9 +103,9 @@ export function BillProvider({ children }: { children: ReactNode }) {
 
   const taxAmount = items.reduce((sum, item) => {
     const rate = item.gstRate ?? 0;
-    return sum + Math.round(item.rate * item.quantity * rate / 100);
+    return sum + (item.rate * item.quantity * rate / 100);
   }, 0);
-  const grandTotal = Math.round(subtotal - discountAmount + taxAmount);
+  const grandTotal = subtotal - discountAmount + taxAmount;
 
   return (
     <BillContext.Provider
