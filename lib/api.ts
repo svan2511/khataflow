@@ -567,7 +567,7 @@ export const api = {
 
   getCustomRangeReport(token: string, startDate: string, endDate: string) {
     const query = `?start_date=${startDate}&end_date=${endDate}`;
-    return request<CustomRangeReport>('/reports/daily' + query, {}, token);
+    return request<CustomRangeReport>('/reports/custom-range' + query, {}, token);
   },
 
   // ─── Phase 3: Expenses ───────────────────────────────────────────
