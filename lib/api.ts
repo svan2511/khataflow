@@ -482,6 +482,7 @@ export const api = {
 
   listProducts(token: string, params?: {
     per_page?: number;
+    page?: number;
     search?: string;
     category_id?: number;
     low_stock?: boolean;

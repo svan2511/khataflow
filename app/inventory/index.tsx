@@ -27,17 +27,31 @@ export default function ProductsListScreen() {
       if (isRefresh) setRefreshing(true);
       else setLoading(true);
 
-      const params: Record<string, any> = { per_page: 50 };
+      const baseParams: Record<string, any> = { per_page: 100 };
 
-      if (search) params.search = search;
-      if (activeCategory === 'Low Stock') params.low_stock = true;
+      if (search) baseParams.search = search;
+      if (activeCategory === 'Low Stock') baseParams.low_stock = true;
 
-      const res = await api.listProducts(token, params);
-      setProducts(res.data);
-      if (res.meta) setTotalProducts(res.meta.total);
+      // Backend max 100/page deta hai aur products 130+ hai (A-Z order me aate hai),
+      // isliye saare pages load karo — warna "S" wale items (Spring Roll, Steam Rice...)
+      // jaise pichhle pages ke products kabhi dikhenge hi nahi
+      let all: ProductData[] = [];
+      let page = 1;
+      let lastPage = 1;
+      let total = 0;
+      do {
+        const res = await api.listProducts(token, { ...baseParams, page });
+        all = all.concat(res.data);
+        lastPage = res.meta?.last_page ?? 1;
+        total = res.meta?.total ?? all.length;
+        page++;
+      } while (page <= lastPage);
+
+      setProducts(all);
+      if (total) setTotalProducts(total);
 
       const cats = new Set<string>();
-      res.data.forEach(p => {
+      all.forEach(p => {
         if (p.category?.name) cats.add(p.category.name);
       });
       if (cats.size > 0) setCategories(['All Items', 'Low Stock', ...Array.from(cats)]);
