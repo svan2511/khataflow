@@ -50,8 +50,7 @@ function invoiceHTML(bill: BillDetail, shopName: string, shopLogoBase64?: string
       <td>${item.product_name}</td>
       <td class="center">${item.quantity}</td>
       <td class="right">${Number(item.unit_price).toFixed(2)}</td>
-      ${hasGst ? `<td class="right">${gstRate}%</td>` : '<td class="right">—</td>'}
-      <td class="right">${Number(item.subtotal).toFixed(2)}</td>
+      ${hasGstItems ? (hasGst ? `<td class="right">${gstRate}%</td>` : '<td class="right">—</td>') : ''}
       <td class="right bold">${Number(item.total).toFixed(2)}</td>
     </tr>`;
   }).join('');
@@ -108,9 +107,10 @@ body{font-family:'Inter','Helvetica Neue',Arial,sans-serif;background:#f0f2f5;pa
 .section{padding:24px 28px}
 .section-title{font-size:13px;font-weight:700;color:#0f2e2a;margin-bottom:16px;padding-bottom:10px;border-bottom:2px solid #e5e7eb;letter-spacing:0.8px;text-transform:uppercase}
 table{width:100%;border-collapse:separate;border-spacing:0}
-table.items th{background:#f9fafb;color:#6b7280;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;padding:10px 8px;text-align:right;border-bottom:2px solid #e5e7eb}
+table.items th{color:#6b7280;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;padding:10px 8px;text-align:right;border-bottom:2px solid #e5e7eb}
 table.items th:first-child{text-align:center;border-radius:10px 0 0 0}
 table.items th:nth-child(2){text-align:left}
+table.items th.center{text-align:center}
 table.items th:last-child{border-radius:0 10px 0 0}
 table.items td{padding:10px 8px;text-align:right;border-bottom:1px solid #f3f4f6;color:#374151;font-size:12px}
 table.items td:first-child{text-align:center;color:#9ca3af}
@@ -134,7 +134,7 @@ ${gstRows ? `
 .gst-section{padding:0 28px 16px}
 .gst-title{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#9ca3af;margin-bottom:8px}
 table.gst{width:100%;border-collapse:separate;border-spacing:0;font-size:11px}
-table.gst th{background:#f9fafb;color:#6b7280;font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;padding:8px;text-align:right;border-bottom:2px solid #e5e7eb}
+table.gst th{color:#6b7280;font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;padding:8px;text-align:right;border-bottom:2px solid #e5e7eb}
 table.gst th:first-child{text-align:left;border-radius:8px 0 0 0}
 table.gst th:last-child{border-radius:0 8px 0 0}
 table.gst td{padding:6px 8px;text-align:right;border-bottom:1px solid #f3f4f6;color:#374151}
@@ -145,7 +145,7 @@ ${bill.payments && bill.payments.length > 0 ? `
 .payment-section{padding:0 28px 16px}
 .pay-title{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#9ca3af;margin-bottom:8px}
 table.payments{width:100%;border-collapse:separate;border-spacing:0;font-size:11px}
-table.payments th{background:#f9fafb;color:#6b7280;font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;padding:8px;text-align:left;border-bottom:2px solid #e5e7eb}
+table.payments th{color:#6b7280;font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;padding:8px;text-align:left;border-bottom:2px solid #e5e7eb}
 table.payments th:last-child{text-align:right}
 table.payments th:first-child{border-radius:8px 0 0 0}
 table.payments th:last-child{border-radius:0 8px 0 0}
@@ -205,7 +205,6 @@ table.payments tr:last-child td{border-bottom:none}
           <th style="width:36px;" class="center">Qty</th>
           <th style="width:56px;">Rate</th>
           ${hasGstItems ? '<th style="width:40px;">GST</th>' : ''}
-          <th style="width:60px;">Amount</th>
           <th style="width:64px;">Total</th>
         </tr>
       </thead>

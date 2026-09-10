@@ -1,17 +1,19 @@
 import { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, StyleSheet, TextInput, Alert, KeyboardAvoidingView, Platform, Image } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, StyleSheet, TextInput, KeyboardAvoidingView, Platform, Image } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Tokens, Typography, Spacing, BorderRadius } from '@/constants/theme';
 import { useBill } from '@/lib/bill-context';
 import { useAuth } from '@/lib/auth-context';
+import { useToast } from '@/components/toast-provider';
 import { api } from '@/lib/api';
 import Loader from '@/components/Loader';
 import { useTranslation } from 'react-i18next';
 
 export default function BillReviewScreen() {
   const { t } = useTranslation();
+  const { showToast } = useToast();
   const {
     items, customer, paymentMode, discount, notes,
     subtotal, discountAmount, taxAmount, grandTotal,
@@ -76,10 +78,11 @@ export default function BillReviewScreen() {
     if (!token) return;
 
     if (dueAmount > 0 && !customer?.uuid) {
-      Alert.alert(
-        t('bill.customerRequired'),
-        t('bill.customerRequiredForUdhaar', { amount: dueAmount.toFixed(2) }),
-      );
+      showToast({
+        type: 'error',
+        title: t('bill.customerRequired'),
+        message: t('bill.customerRequiredForUdhaar', { amount: dueAmount.toFixed(2) }),
+      });
       return;
     }
 

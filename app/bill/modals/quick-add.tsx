@@ -14,9 +14,9 @@ export default function QuickAddModal() {
   const { addItem } = useBill();
   const { t } = useTranslation();
 
-  const units = ['Piece', 'Kilogram', 'Liter', 'Gram'];
+  const units = ['Piece', 'Kilogram', 'Liter', 'Gram', 'Plate'];
 
-  const isIntegerUnit = (unit: string) => unit === 'Piece';
+  const isIntegerUnit = (unit: string) => ['piece', 'plate'].includes(unit.toLowerCase());
 
   const handleAdd = () => {
     if (!name.trim() || !rate) return;

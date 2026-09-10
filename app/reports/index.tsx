@@ -117,6 +117,18 @@ export default function ReportsScreen() {
     ? monthlyReport?.current_month.total_credit ?? 0
     : customReport?.total_credit ?? 0;
 
+  const totalExpenses = period === 'daily'
+    ? dailyReport?.total_expenses ?? 0
+    : period === 'monthly'
+    ? monthlyReport?.current_month.total_expenses ?? 0
+    : customReport?.total_expenses ?? 0;
+
+  const netProfit = period === 'daily'
+    ? dailyReport?.net_profit ?? 0
+    : period === 'monthly'
+    ? monthlyReport?.current_month.net_profit ?? 0
+    : customReport?.net_profit ?? 0;
+
   const paymentBreakdown = period === 'daily'
     ? dailyReport?.payment_breakdown
     : period === 'monthly'
@@ -236,6 +248,16 @@ tbody tr:last-child td{border-bottom:none}
     <div class="summary-item">
       <h4>Total Credit</h4>
       <div class="value credit">₹${fmt(Number(totalCredit))}</div>
+    </div>
+  </div>
+  <div class="summary" style="border-top:1px solid #f0f0f0">
+    <div class="summary-item">
+      <h4>Total Expenses</h4>
+      <div class="value" style="color:#c62828">₹${fmt(Number(totalExpenses))}</div>
+    </div>
+    <div class="summary-item">
+      <h4>${Number(netProfit) >= 0 ? 'Net Profit' : 'Net Loss'}</h4>
+      <div class="value" style="color:${Number(netProfit) >= 0 ? '#2e7d32' : '#c62828'}">₹${fmt(Number(netProfit))}</div>
     </div>
   </div>
   <div class="section">
@@ -437,6 +459,40 @@ tbody tr:last-child td{border-bottom:none}
           </View>
         </View>
 
+        {/* Profit / Loss */}
+        <View style={styles.card}>
+          <View style={styles.cardHeader}>
+            <Ionicons name="pie-chart-outline" size={18} color={Tokens.secondary} />
+            <Text style={styles.cardTitle}>{t('reports.profitLoss')}</Text>
+          </View>
+          <View style={styles.profitRow}>
+            <View style={styles.profitCol}>
+              <View style={[styles.statIcon, { backgroundColor: '#ffebee' }]}>
+                <Ionicons name="wallet-outline" size={20} color="#c62828" />
+              </View>
+              <Text style={[styles.profitValue, { color: '#c62828' }]}>₹{fmt(Number(totalExpenses))}</Text>
+              <Text style={styles.statLabel}>{t('reports.totalExpenses')}</Text>
+            </View>
+            <View style={styles.profitDivider} />
+            <View style={styles.profitCol}>
+              <View style={[styles.statIcon, { backgroundColor: netProfit >= 0 ? '#e8f5e9' : '#ffebee' }]}>
+                <Ionicons
+                  name={netProfit >= 0 ? 'trending-up' : 'trending-down'}
+                  size={20}
+                  color={netProfit >= 0 ? '#2e7d32' : '#c62828'}
+                />
+              </View>
+              <Text style={[styles.profitValue, { color: netProfit >= 0 ? '#2e7d32' : '#c62828' }]}>
+                ₹{fmt(Number(netProfit))}
+              </Text>
+              <Text style={styles.statLabel}>
+                {netProfit >= 0 ? t('reports.netProfit') : t('reports.netLoss')}
+              </Text>
+            </View>
+          </View>
+          <Text style={styles.profitHint}>{t('reports.profitHint')}</Text>
+        </View>
+
         {/* Payment Breakdown */}
         {paymentBreakdown && (
           <View style={styles.card}>
@@ -569,6 +625,13 @@ const styles = StyleSheet.create({
   },
   cardHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 16 },
   cardTitle: { fontSize: 16, fontWeight: '700', color: '#1c1c1e' },
+
+  // Profit / Loss
+  profitRow: { flexDirection: 'row', alignItems: 'center' },
+  profitCol: { flex: 1, alignItems: 'center', gap: 6, paddingVertical: 4 },
+  profitDivider: { width: 1, alignSelf: 'stretch', backgroundColor: '#f0f0f0', marginHorizontal: 8 },
+  profitValue: { fontSize: 20, fontWeight: '800', letterSpacing: -0.3 },
+  profitHint: { fontSize: 11, color: '#9ca3af', textAlign: 'center', marginTop: 12 },
 
   // Payment Breakdown
   breakdownList: { gap: 12 },

@@ -1,4 +1,5 @@
-const API_BASE = 'https://khata-flow-api.onrender.com/api';
+//const API_BASE = 'https://khata-flow-api.onrender.com/api';
+const API_BASE = 'http://10.90.235.212:8000/api';
 
 export interface ApiResponse<T = any> {
   success: boolean;
@@ -203,6 +204,8 @@ export interface DailyReport {
   total_paid: number;
   total_due: number;
   total_credit: number;
+  total_expenses: number;
+  net_profit: number;
   payment_breakdown: {
     cash: number;
     upi: number;
@@ -225,6 +228,8 @@ export interface MonthlyReport {
     total_bills: number;
     average_per_day: number;
     total_credit: number;
+    total_expenses: number;
+    net_profit: number;
     payment_breakdown: {
       cash: number; upi: number; card: number; mix: number; credit: number;
     };
@@ -253,6 +258,8 @@ export interface CustomRangeReport {
   total_sales: number;
   total_bills: number;
   total_credit: number;
+  total_expenses: number;
+  net_profit: number;
   payment_breakdown: {
     cash: number; upi: number; card: number; mix: number; credit: number;
   };

@@ -45,6 +45,23 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const idRef = useRef(0);
   const { t } = useTranslation();
 
+  const hideToast = useCallback((id?: number) => {
+    Animated.parallel([
+      Animated.timing(opacity, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+      Animated.timing(translateY, {
+        toValue: -80,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      setToast(prev => prev && prev.id === id ? null : prev);
+    });
+  }, [opacity, translateY]);
+
   const showToast = useCallback((config: ToastConfig) => {
     const id = ++idRef.current;
     setToast({ config, id });
@@ -71,23 +88,6 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       hideToast(id);
     }, duration);
   }, [opacity, translateY, hideToast]);
-
-  const hideToast = useCallback((id?: number) => {
-    Animated.parallel([
-      Animated.timing(opacity, {
-        toValue: 0,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-      Animated.timing(translateY, {
-        toValue: -80,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-    ]).start(() => {
-      setToast(prev => prev && prev.id === id ? null : prev);
-    });
-  }, [opacity, translateY]);
 
   const showConfirm = useCallback((config: ConfirmConfig) => {
     setConfirm(config);

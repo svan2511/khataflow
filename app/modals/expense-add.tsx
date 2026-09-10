@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { View, Text, TouchableOpacity, TextInput, ScrollView, StyleSheet, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, TouchableOpacity, TextInput, ScrollView, StyleSheet, ActivityIndicator, Platform, KeyboardAvoidingView, Keyboard } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { Tokens, Spacing } from '@/constants/theme';
 import { useAuth } from '@/lib/auth-context';
+import { useToast } from '@/components/toast-provider';
 import { api } from '@/lib/api';
 
 const categories = [
@@ -13,49 +15,56 @@ const categories = [
   'Transport & Logistics',
   'Staff Welfare (Tea/Snacks)',
   'Repairs & Maintenance',
+  'Restaurant & Kitchen Supplies',
   'Other',
 ];
 
 export default function ExpenseAddModal() {
   const { token } = useAuth();
+  const { showToast } = useToast();
   const [amount, setAmount] = useState('');
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState('');
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
+  const [expenseDate, setExpenseDate] = useState(new Date());
+  const [showDatePicker, setShowDatePicker] = useState(false);
   const [saving, setSaving] = useState(false);
   const { t } = useTranslation();
 
   const handleSave = async () => {
     if (!token) return;
     if (!title.trim()) {
-      Alert.alert('Validation', 'Please enter an expense title.');
+      showToast({ type: 'error', title: 'Validation', message: 'Please enter an expense title.' });
       return;
     }
     if (!amount || Number(amount) <= 0) {
-      Alert.alert('Validation', 'Please enter a valid amount.');
+      showToast({ type: 'error', title: 'Validation', message: 'Please enter a valid amount.' });
       return;
     }
 
     setSaving(true);
     try {
+      const expense_date = expenseDate.getFullYear() + '-' + String(expenseDate.getMonth() + 1).padStart(2, '0') + '-' + String(expenseDate.getDate()).padStart(2, '0');
       await api.createExpense(token, {
         title: title.trim(),
         amount: Number(amount),
         category: category || undefined,
-        expense_date: new Date().toISOString().split('T')[0],
+        expense_date,
       });
-      Alert.alert('Success', t('expense.savedSuccess'), [
-        { text: 'OK', onPress: () => router.back() }
-      ]);
+      showToast({ type: 'success', title: t('expense.savedSuccess') });
+      router.back();
     } catch (e: any) {
-      Alert.alert('Error', e.message || t('expense.saveFailed'));
+      showToast({ type: 'error', title: t('common.error'), message: e.message || t('expense.saveFailed') });
     } finally {
       setSaving(false);
     }
   };
 
   return (
-    <View style={styles.overlay}>
+    <KeyboardAvoidingView
+      style={styles.overlay}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    >
       <View style={styles.modal}>
         {/* Modal Header */}
         <View style={styles.header}>
@@ -102,7 +111,7 @@ export default function ExpenseAddModal() {
           {/* Category Dropdown */}
           <View style={styles.field}>
             <Text style={styles.label}>{t('expense.category')}</Text>
-            <TouchableOpacity style={styles.selectBtn} onPress={() => setShowCategoryPicker(!showCategoryPicker)}>
+            <TouchableOpacity style={styles.selectBtn} onPress={() => { Keyboard.dismiss(); setShowCategoryPicker(!showCategoryPicker); }}>
               <Text style={[styles.selectText, !category && { color: Tokens.outline }]}>
                 {category || 'Select a category'}
               </Text>
@@ -127,16 +136,26 @@ export default function ExpenseAddModal() {
           {/* Date Display */}
           <View style={styles.field}>
             <Text style={styles.label}>{t('expense.date')}</Text>
-            <View style={styles.dateInputWrap}>
-              <TextInput
-                style={styles.dateInput}
-                placeholder="Today"
-                placeholderTextColor={Tokens.outline}
-                value={new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}
-                editable={false}
-              />
-            </View>
+            <TouchableOpacity style={styles.dateInputWrap} onPress={() => setShowDatePicker(true)}>
+              <Text style={styles.dateInput}>
+                {expenseDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}
+              </Text>
+              <Ionicons name="calendar-outline" size={20} color={Tokens['on-surface-variant']} />
+            </TouchableOpacity>
           </View>
+
+          {showDatePicker && (
+            <DateTimePicker
+              value={expenseDate}
+              mode="date"
+              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+              maximumDate={new Date()}
+              onChange={(event: DateTimePickerEvent, date?: Date) => {
+                if (event.type === 'dismissed' || Platform.OS !== 'ios') setShowDatePicker(false);
+                if (date) setExpenseDate(date);
+              }}
+            />
+          )}
 
           {/* Footer Actions */}
           <View style={styles.actions}>
@@ -156,7 +175,7 @@ export default function ExpenseAddModal() {
           </View>
         </ScrollView>
       </View>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -222,11 +241,11 @@ const styles = StyleSheet.create({
   pickerText: { fontSize: 14, color: Tokens['on-surface'] },
   pickerTextActive: { color: Tokens.secondary, fontWeight: '600' },
   dateInputWrap: {
-    height: 56, justifyContent: 'center',
+    height: 56, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 14,
     backgroundColor: Tokens.surface, borderWidth: 1, borderColor: Tokens['outline-variant'], borderRadius: 12,
   },
   dateInput: {
-    height: 56, paddingHorizontal: 14,
     fontSize: 16, color: Tokens['on-surface'],
   },
   actions: {

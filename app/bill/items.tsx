@@ -30,7 +30,7 @@ export default function ProductSelectScreen() {
   const [quickStock, setQuickStock] = useState('');
   const [quickLowStock, setQuickLowStock] = useState('');
   const [quickSaving, setQuickSaving] = useState(false);
-  const quickUnits = ['pc', 'kg', 'g', 'l', 'ml', 'dozen', 'box', 'packet'];
+  const quickUnits = ['pc', 'kg', 'g', 'l', 'ml', 'dozen', 'box', 'packet', 'plate'];
 
   useEffect(() => {
     if (newCustomerId && newCustomerName) {

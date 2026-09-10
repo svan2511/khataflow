@@ -23,6 +23,7 @@ const menuItems: SidebarItem[] = [
   { label: 'sidebar.inventory', icon: 'cube-outline', route: '/inventory' },
   { label: 'sidebar.customers', icon: 'people-outline', route: '/customers' },
   { label: 'sidebar.reports', icon: 'bar-chart-outline', route: '/reports' },
+  { label: 'sidebar.expenses', icon: 'wallet-outline', route: '/expenses' },
 ];
 
 const bottomItems: SidebarItem[] = [
@@ -36,6 +37,7 @@ const menuIcons: Record<string, { focused: keyof typeof Ionicons.glyphMap; bg: s
   '/inventory': { focused: 'cube', bg: '#e3f2fd' },
   '/customers': { focused: 'people', bg: '#fff3e0' },
   '/reports': { focused: 'bar-chart', bg: '#f3e8ff' },
+  '/expenses': { focused: 'wallet', bg: '#fce4ec' },
   '/(tabs)/profile': { focused: 'person', bg: '#fce4ec' },
   '/(tabs)/settings': { focused: 'settings', bg: '#e0f2fe' },
   '/(tabs)/sync': { focused: 'cloudy', bg: '#e8f5e9' },

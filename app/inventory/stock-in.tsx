@@ -1,16 +1,18 @@
 import { useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { View, Text, TouchableOpacity, ScrollView, TextInput, StyleSheet, Alert, ActivityIndicator, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, TextInput, StyleSheet, ActivityIndicator, KeyboardAvoidingView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Tokens, Spacing } from '@/constants/theme';
 import SidebarDrawer from '@/components/SidebarDrawer';
 import { useAuth } from '@/lib/auth-context';
+import { useToast } from '@/components/toast-provider';
 import { api, ProductData } from '@/lib/api';
 
 export default function StockInScreen() {
   const { token } = useAuth();
+  const { showToast } = useToast();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [searchResults, setSearchResults] = useState<ProductData[]>([]);
@@ -45,11 +47,11 @@ export default function StockInScreen() {
 
   const handleStockIn = async () => {
     if (!token || !selectedProduct) {
-      Alert.alert(t('common.error'), t('inventory.selectProductFirst'));
+      showToast({ type: 'error', title: t('common.error'), message: t('inventory.selectProductFirst') });
       return;
     }
     if (!quantity || Number(quantity) <= 0) {
-      Alert.alert(t('common.validation'), t('inventory.validQuantity'));
+      showToast({ type: 'error', title: t('common.validation'), message: t('inventory.validQuantity') });
       return;
     }
 
@@ -60,11 +62,10 @@ export default function StockInScreen() {
         quantity: Number(quantity),
         cost_price: purchasePrice ? Number(purchasePrice) : undefined,
       });
-      Alert.alert(t('common.success'), t('inventory.stockInSuccess'), [
-        { text: t('common.ok'), onPress: () => router.back() }
-      ]);
+      showToast({ type: 'success', title: t('common.success'), message: t('inventory.stockInSuccess') });
+      router.back();
     } catch (e: any) {
-      Alert.alert(t('common.error'), e.message || t('inventory.stockInFailed'));
+      showToast({ type: 'error', title: t('common.error'), message: e.message || t('inventory.stockInFailed') });
     } finally {
       setSaving(false);
     }

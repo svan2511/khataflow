@@ -1,16 +1,18 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { View, Text, TouchableOpacity, ScrollView, TextInput, StyleSheet, ActivityIndicator, Image, Alert, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, TextInput, StyleSheet, ActivityIndicator, Image, KeyboardAvoidingView, Platform } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import { Tokens, Spacing } from '@/constants/theme';
 import { useAuth } from '@/lib/auth-context';
+import { useToast } from '@/components/toast-provider';
 import { api, ProductData } from '@/lib/api';
 
 export default function AddEditProductScreen() {
   const { token } = useAuth();
+  const { showToast } = useToast();
   const { id } = useLocalSearchParams<{ id?: string }>();
   const isEditing = !!id;
   const [loading, setLoading] = useState(isEditing);
@@ -48,7 +50,7 @@ export default function AddEditProductScreen() {
       setLowStockThreshold(p.low_stock_threshold ? String(p.low_stock_threshold) : '');
       if (p.image) setImage(p.image);
     } catch (e: any) {
-      Alert.alert(t('common.error'), t('inventory.loadFailed'));
+      showToast({ type: 'error', title: t('common.error'), message: t('inventory.loadFailed') });
       router.back();
     } finally {
       setLoading(false);
@@ -58,7 +60,7 @@ export default function AddEditProductScreen() {
   const pickImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert(t('inventory.permissionNeeded'), t('inventory.galleryPermission'));
+      showToast({ type: 'info', title: t('inventory.permissionNeeded'), message: t('inventory.galleryPermission') });
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -75,11 +77,11 @@ export default function AddEditProductScreen() {
   const handleSave = async () => {
     if (!token) return;
     if (!productName.trim()) {
-      Alert.alert(t('common.validation'), t('inventory.nameRequired'));
+      showToast({ type: 'error', title: t('common.validation'), message: t('inventory.nameRequired') });
       return;
     }
     if (!sellingPrice || Number(sellingPrice) <= 0) {
-      Alert.alert(t('common.validation'), t('inventory.priceRequired'));
+      showToast({ type: 'error', title: t('common.validation'), message: t('inventory.priceRequired') });
       return;
     }
 
@@ -88,8 +90,10 @@ export default function AddEditProductScreen() {
       const formData = buildForm();
       if (isEditing && id) {
         await api.updateProductFull(token, id, formData);
+        showToast({ type: 'success', title: t('common.success'), message: t('inventory.updatedSuccess') });
       } else {
         await api.createProductFull(token, formData);
+        showToast({ type: 'success', title: t('common.success'), message: t('inventory.savedSuccess') });
       }
       router.back();
     } catch (e: any) {
@@ -97,13 +101,14 @@ export default function AddEditProductScreen() {
         const fallback = buildForm(true);
         try {
           await api.createProductFull(token, fallback);
+          showToast({ type: 'success', title: t('common.success'), message: t('inventory.savedSuccess') });
           router.back();
           return;
         } catch {}
       }
       const apiMsg = e?.message || '';
       const translated = /low stock threshold/i.test(apiMsg) ? t('validation.lowStockThresholdRequired') : apiMsg;
-      Alert.alert(t('common.error'), translated || t('inventory.saveFailed'));
+      showToast({ type: 'error', title: t('common.error'), message: translated || t('inventory.saveFailed') });
     } finally {
       setSaving(false);
     }
@@ -126,7 +131,7 @@ export default function AddEditProductScreen() {
     return fd;
   };
 
-  const units = ['pc', 'kg', 'g', 'l', 'ml', 'dozen', 'box', 'packet'];
+  const units = ['pc', 'kg', 'g', 'l', 'ml', 'dozen', 'box', 'packet', 'plate'];
 
   if (loading) {
     return (
