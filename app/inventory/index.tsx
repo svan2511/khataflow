@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View, Text, TouchableOpacity, ScrollView, TextInput, StyleSheet, ActivityIndicator, RefreshControl, Image } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Tokens, Spacing } from '@/constants/theme';
@@ -11,6 +11,7 @@ import { api, ProductData } from '@/lib/api';
 
 export default function ProductsListScreen() {
   const { token } = useAuth();
+  const insets = useSafeAreaInsets();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [activeCategory, setActiveCategory] = useState('All Items');
@@ -256,7 +257,7 @@ export default function ProductsListScreen() {
         )}
       </ScrollView>
 
-      <TouchableOpacity style={styles.fab} onPress={() => (router as any).push('/inventory/add')}>
+      <TouchableOpacity style={[styles.fab, { bottom: insets.bottom + 20 }]} onPress={() => (router as any).push('/inventory/add')}>
         <Ionicons name="add" size={28} color={Tokens['on-primary']} />
       </TouchableOpacity>
 

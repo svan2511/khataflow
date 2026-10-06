@@ -12,29 +12,31 @@ import { useTranslation } from 'react-i18next';
 import { Image, Linking, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+const SUPPORT_EMAIL = 'anilkumarsikwal25@gmail.com';
+
 const settingsMenu = [
   {
     icon: 'receipt-outline' as const,
-    title: 'Bill Settings',
-    subtitle: 'Customize invoice format and fields',
+    titleKey: 'settings.billSettings',
+    subtitleKey: 'settings.billSettingsSub',
     route: 'bill-settings' as const,
   },
   {
     icon: 'document-text-outline' as const,
-    title: 'Tax & GST',
-    subtitle: 'Manage tax rates and HSN codes',
+    titleKey: 'settings.taxGst',
+    subtitleKey: 'settings.taxGstSub',
     route: 'tax-gst' as const,
   },
   {
     icon: 'print-outline' as const,
-    title: 'Printers',
-    subtitle: 'Connect thermal and laser printers',
+    titleKey: 'settings.printers',
+    subtitleKey: 'settings.printersSub',
     route: 'printers' as const,
   },
   {
     icon: 'help-circle-outline' as const,
-    title: 'Help',
-    subtitle: 'Contact support and tutorials',
+    titleKey: 'settings.help',
+    subtitleKey: 'settings.helpSub',
     route: 'help' as const,
   },
 ];
@@ -64,14 +66,14 @@ export default function SettingsScreen() {
     }, [fetchProfile])
   );
 
-  const handleSettingsPress = (route: string) => {
+  const handleSettingsPress = (route: string, title?: string) => {
     if (route === 'help') {
-      Linking.openURL('mailto:support@dukaansahayak.app').catch(() => {
-        showToast({ type: 'info', title: t('settings.contactSupport'), message: 'support@dukaansahayak.app' });
+      Linking.openURL(`mailto:${SUPPORT_EMAIL}`).catch(() => {
+        showToast({ type: 'info', title: t('settings.contactSupport'), message: SUPPORT_EMAIL });
       });
       return;
     }
-    showToast({ type: 'info', title: t('settings.comingSoon') });
+    showToast({ type: 'info', title: t('settings.comingSoon', { feature: title ?? '' }).trim() });
   };
 
   const toggleLanguage = async () => {
@@ -139,14 +141,14 @@ export default function SettingsScreen() {
               key={item.route}
               style={styles.settingsCard}
               activeOpacity={0.9}
-              onPress={() => handleSettingsPress(item.route)}
+              onPress={() => handleSettingsPress(item.route, t(item.titleKey))}
             >
               <View style={styles.settingsIcon}>
                 <Ionicons name={item.icon} size={28} color={Tokens.secondary} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.settingsTitle}>{item.title}</Text>
-                <Text style={styles.settingsSubtitle} numberOfLines={1}>{item.subtitle}</Text>
+                <Text style={styles.settingsTitle}>{t(item.titleKey)}</Text>
+                <Text style={styles.settingsSubtitle} numberOfLines={1}>{t(item.subtitleKey)}</Text>
               </View>
               <Ionicons name="chevron-forward" size={20} color={Tokens.outline} />
             </TouchableOpacity>

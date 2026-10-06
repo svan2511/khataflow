@@ -274,7 +274,7 @@ tbody tr:last-child td{border-bottom:none}
     </div>
   </div>
   <div class="section" style="padding-top:0">
-    <div class="section-title">Top Products</div>
+    <div class="section-title">Products Sold (${topProducts.length})</div>
     <table><thead><tr><th style="text-align:center">#</th><th>Product</th><th style="text-align:center">Qty Sold</th><th style="text-align:right">Revenue</th></tr></thead><tbody>${topRows}</tbody></table>
   </div>
   </div>
@@ -524,12 +524,12 @@ tbody tr:last-child td{border-bottom:none}
           </View>
         )}
 
-        {/* Top Items */}
+        {/* Top Items - shows ALL sold products, not just top 10 */}
         {topProducts.length > 0 ? (
           <View style={styles.card}>
             <View style={styles.cardHeader}>
               <Ionicons name="basket-outline" size={18} color={Tokens.secondary} />
-              <Text style={styles.cardTitle}>{t('reports.topProducts')}</Text>
+              <Text style={styles.cardTitle}>{t('reports.topProducts')} ({topProducts.length})</Text>
             </View>
             {topProducts.map((item, i) => (
               <View key={i} style={styles.topItem}>

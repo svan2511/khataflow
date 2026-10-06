@@ -590,7 +590,9 @@
     "justNow": "Just now",
     "minAgo": "{{count}}m ago",
     "hourAgo": "{{count}}h ago",
-    "dayAgo": "{{count}}d ago"
+    "dayAgo": "{{count}}d ago",
+    "comingSoon": "Coming Soon",
+    "comingSoonSub": "Offline sync is not available yet. Your data is safe on this device and will sync automatically once this feature launches."
   },
   "sidebar": {
     "dashboard": "Dashboard",
