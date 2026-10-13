@@ -290,6 +290,84 @@ export function setUnauthorizedHandler(handler: () => void) {
   onUnauthorized = handler;
 }
 
+// ─── User-safe error handling ──────────────────────────────────────
+// ApiError.message is ALWAYS safe to show to normal users (Hindi/English).
+// Raw technical details (HTML pages, SQL errors, stack traces) go to
+// `debug` and console only — never to the UI.
+
+export type ApiErrorCode =
+  | 'network'
+  | 'server'
+  | 'auth'
+  | 'forbidden'
+  | 'not_found'
+  | 'conflict'
+  | 'validation'
+  | 'rate_limited'
+  | 'bad_request';
+
+export class ApiError extends Error {
+  code: ApiErrorCode;
+  status?: number;
+  /** Technical detail for logs only. Never render this in UI. */
+  debug?: string;
+
+  constructor(code: ApiErrorCode, userMessage: string, opts?: { status?: number; debug?: string }) {
+    super(userMessage);
+    this.name = 'ApiError';
+    this.code = code;
+    this.status = opts?.status;
+    this.debug = opts?.debug;
+  }
+}
+
+export function isApiError(e: unknown): e is ApiError {
+  return e instanceof ApiError;
+}
+
+/**
+ * Safe fallback for screens that don't map error codes to translations.
+ * Never returns raw technical text.
+ */
+export function apiErrorMessage(e: unknown, fallback: string): string {
+  if (isApiError(e)) return e.message;
+  return fallback;
+}
+
+const FRIENDLY: Record<ApiErrorCode, string> = {
+  network: 'No internet connection. Please check your network and try again.',
+  server: 'Server is busy right now. Please try again in a moment.',
+  auth: 'Session expired. Please log in again.',
+  forbidden: 'You are not allowed to perform this action.',
+  not_found: 'Record not found. It may have been deleted.',
+  conflict: 'This record already exists.',
+  validation: 'Please check the entered details and try again.',
+  rate_limited: 'Too many attempts. Please wait a moment and try again.',
+  bad_request: 'Something went wrong. Please try again.',
+};
+
+/** Returns the server message only if it is safe for normal users. */
+function sanitizeServerMessage(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const msg = value.trim();
+  if (!msg || msg.length > 180) return null;
+  if (/<[a-z!][^>]*>/i.test(msg)) return null; // HTML page leaked through
+  if (/sqlstate|query exception|integrity constraint|stack trace|\.php|exception:/i.test(msg)) return null;
+  return msg;
+}
+
+function firstValidationMessage(errors: unknown): string | null {
+  if (!errors || typeof errors !== 'object') return null;
+  for (const v of Object.values(errors as Record<string, unknown>)) {
+    const list = Array.isArray(v) ? v : [v];
+    for (const item of list) {
+      const safe = sanitizeServerMessage(item);
+      if (safe) return safe;
+    }
+  }
+  return null;
+}
+
 async function request<T>(
   endpoint: string,
   options: RequestInit = {},
@@ -308,26 +386,73 @@ async function request<T>(
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const response = await fetch(`${API_BASE}${endpoint}`, {
-    ...options,
-    headers,
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE}${endpoint}`, {
+      ...options,
+      headers,
+    });
+  } catch (err) {
+    // Offline / DNS / timeout — never show the raw fetch error.
+    console.error(`[api] network failure ${endpoint}`, err);
+    throw new ApiError('network', FRIENDLY.network, { debug: String(err) });
+  }
 
-  let data: any;
   const contentType = response.headers.get('content-type') || '';
-  if (contentType.includes('application/json')) {
-    data = await response.json();
-  } else {
-    const text = await response.text();
-    throw new Error(`Server returned ${response.status} ${response.statusText} instead of JSON`);
+  const isJson = contentType.includes('application/json');
+  const text = await response.text();
+
+  let data: any = null;
+  if (text) {
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = null;
+    }
   }
 
   if (!response.ok) {
     if (response.status === 401) {
       onUnauthorized?.();
-      throw new Error('Session expired. Please log in again.');
+      throw new ApiError('auth', FRIENDLY.auth, { status: 401 });
     }
-    throw new Error(data.message || 'Something went wrong');
+    if (response.status === 403) {
+      throw new ApiError('forbidden', sanitizeServerMessage(data?.message) ?? FRIENDLY.forbidden, { status: 403 });
+    }
+    if (response.status === 404) {
+      throw new ApiError('not_found', sanitizeServerMessage(data?.message) ?? FRIENDLY.not_found, { status: 404 });
+    }
+    if (response.status === 409) {
+      throw new ApiError('conflict', sanitizeServerMessage(data?.message) ?? FRIENDLY.conflict, { status: 409 });
+    }
+    if (response.status === 422) {
+      const msg =
+        firstValidationMessage(data?.errors) ??
+        sanitizeServerMessage(data?.message) ??
+        FRIENDLY.validation;
+      throw new ApiError('validation', msg, { status: 422 });
+    }
+    if (response.status === 429) {
+      throw new ApiError('rate_limited', FRIENDLY.rate_limited, { status: 429 });
+    }
+    if (response.status >= 500) {
+      console.error(`[api] server error ${endpoint} status=${response.status}`, (text || '').slice(0, 300));
+      throw new ApiError('server', FRIENDLY.server, { status: response.status });
+    }
+    const safe = isJson ? sanitizeServerMessage(data?.message) : null;
+    console.error(`[api] request failed ${endpoint} status=${response.status}`, (text || '').slice(0, 300));
+    throw new ApiError('bad_request', safe ?? FRIENDLY.bad_request, { status: response.status });
+  }
+
+  // Success but empty body (e.g. 204) — treat as success, not an error.
+  if (response.status === 204 || !text.trim()) {
+    return { success: true, message: '', data: null as T };
+  }
+
+  if (!isJson || data === null) {
+    // e.g. a proxy/CDN served an HTML page with 200. Log it, show friendly text.
+    console.error(`[api] non-JSON success body ${endpoint} status=${response.status}`, text.slice(0, 300));
+    throw new ApiError('server', FRIENDLY.server, { status: response.status });
   }
 
   return data;

@@ -67,7 +67,12 @@
     "dismiss": "Dismiss",
     "permissionNeeded": "Permission needed",
     "to": "to",
-    "validation": "Validation"
+    "validation": "Validation",
+    "networkError": "No internet connection. Please check your network and try again.",
+    "serverBusy": "Server is busy. Please try again in a moment.",
+    "sessionExpired": "Session expired. Please log in again.",
+    "notFound": "Record not found.",
+    "somethingWentWrong": "Something went wrong. Please try again."
   },
   "splash": {
     "tagline": "Smart dukaan · Smart hisaab",
@@ -467,6 +472,8 @@
     "saveFailed": "Failed to save customer",
     "searchCustomers": "Search customers...",
     "updatedSuccess": "Customer updated successfully",
+    "updateFailed": "Failed to update customer. Please try again.",
+    "invalidPhone": "Please enter a valid mobile number.",
     "billHistory": "Bill History",
     "createBill": "Create Bill",
     "customerDetail": "Customer Details",

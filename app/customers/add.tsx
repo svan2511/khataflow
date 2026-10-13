@@ -6,7 +6,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Tokens, Spacing } from '@/constants/theme';
 import { useAuth } from '@/lib/auth-context';
-import { api } from '@/lib/api';
+import { api, isApiError } from '@/lib/api';
 import { useToast } from '@/components/toast-provider';
 
 export default function AddEditCustomerScreen() {
@@ -31,17 +31,42 @@ export default function AddEditCustomerScreen() {
       setFullName(res.data.name);
       setMobile(res.data.phone || '');
     } catch (e: any) {
-      showToast({ type: 'error', title: t('common.error'), message: t('customers.loadFailed') });
+      console.error('Failed to load customer', e?.debug ?? e);
+      showToast({ type: 'error', title: t('common.error'), message: friendlyError(e, t('customers.loadFailed')) });
       router.back();
     } finally {
       setLoading(false);
     }
   };
 
+  /** Maps technical/network failures to translated, user-friendly text. */
+  const friendlyError = (e: any, fallback: string): string => {
+    if (isApiError(e)) {
+      switch (e.code) {
+        case 'network':
+          return t('common.networkError');
+        case 'auth':
+          return t('common.sessionExpired');
+        case 'server':
+          return t('common.serverBusy');
+        case 'not_found':
+          return t('common.notFound');
+        default:
+          return e.message; // validation/conflict messages are already sanitized
+      }
+    }
+    return fallback;
+  };
+
   const handleSave = async () => {
     if (!token) return;
     if (!fullName.trim()) {
       showToast({ type: 'error', title: t('common.validation'), message: t('customers.nameRequired') });
+      return;
+    }
+    const digits = mobile.replace(/\D/g, '');
+    if (mobile.trim() && digits.length < 7) {
+      showToast({ type: 'error', title: t('common.validation'), message: t('customers.invalidPhone') });
       return;
     }
 
@@ -74,7 +99,8 @@ export default function AddEditCustomerScreen() {
         }
       }
     } catch (e: any) {
-      showToast({ type: 'error', title: t('common.error'), message: e.message || t('customers.saveFailed') });
+      console.error('Failed to save customer', e?.debug ?? e);
+      showToast({ type: 'error', title: t('common.error'), message: friendlyError(e, t('customers.saveFailed')) });
     } finally {
       setSaving(false);
     }
