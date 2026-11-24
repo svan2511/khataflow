@@ -16,6 +16,7 @@ Expo SDK 54 / React Native app for Indian kirana store billing & khata (ledger) 
 - **i18next** ^26.3.0 + **react-i18next** ^17.0.8 (English + Hindi)
 - **react-native-reanimated** ~4.1.1
 - **expo-secure-store** ~15.0.8
+- **expo-speech-recognition** ^3.1.3 (on-device STT; native module — needs a dev/prod build, does not work in Expo Go)
 - **expo-font** (Inter, Lexend, NotoSansDevanagari)
 - **expo-print** + **expo-sharing** (PDF invoice generation)
 - **Build**: EAS with 4 profiles (development, preview, production, universal-apk)
@@ -32,7 +33,7 @@ khata-flow/
     shop-setup.tsx            — 3-step wizard (Details → Location → Logo)
     edit-profile.tsx          — Edit shop with image picker
     (tabs)/                   — Bottom tabs: Dashboard, Customers, Inventory, Reports, Settings, Sync
-    bill/                     — Stack nav wrapped in BillProvider: items, search, review, success, history, detail, modals
+    bill/                     — Stack nav wrapped in BillProvider: voice, items, search, review, success, history, detail, modals
     customers/                — Stack: list, add, [id] detail
     inventory/                — Stack: list, add, stock-in
     reports/                  — Daily/monthly/custom tabs, PDF export
@@ -46,6 +47,7 @@ khata-flow/
     bill-context.tsx          — BillProvider: items, customer, paymentMode, discount, GST, resetBill
     i18n.ts                   — initI18n, hasStoredLanguage, changeLanguage, getCurrentLanguage
     bill-pdf.ts               — shareInvoicePdf, shareOnWhatsApp (Android intent)
+    voice-parser.ts           — local rule-based fallback parser (catalog/alias matching) used when /voice/parse fails
   locales/
     en.json                   — ~800 English translations
     hi.json                   — ~800 Hindi translations
@@ -74,6 +76,7 @@ App Open → _layout (fonts + i18n init) → splash.tsx
 
 ## Key Features
 - **Billing**: 5% GST, PDF invoice with amount-in-words, WhatsApp sharing via Android intent
+- **Voice Billing**: `app/bill/voice.tsx` (entry: dashboard "Voice Bill" quick action) records Hindi/English speech with `expo-speech-recognition`, sends the transcript to `POST /api/voice/parse` via `api.parseVoiceBill()`, lets the user edit the draft (items/qty/customer/payment/discount), then fills BillContext and opens the normal `/bill/review` screen. Unresolved products must be matched (or removed) before review. On API failure it falls back to `lib/voice-parser.ts` + `source: 'local'`.
 - **Udhaar (Credit)**: Track customer credit, due amounts, payment recording
 - **Stock Management**: Real-time tracking, low-stock alerts
 - **Customers**: Search, credit history, quick add
@@ -94,6 +97,7 @@ App Open → _layout (fonts + i18n init) → splash.tsx
 - Fallback: `http://192.168.1.9:8000/api`
 - Production: `https://khata-flow-api.onrender.com/api`
 - 401 response → calls `forceSignOut()` set via `setUnauthorizedHandler`
+- Voice: `api.parseVoiceBill(token, transcript, 'hi'|'en')` → `POST /voice/parse`, returns `{items, customer, customer_name, payment_method, discount, notes, assistant_reply, source}`. The backend owns the Gemini key; the app never holds it. Free-tier backend may cold-start (~30-60s) after Render sleep.
 
 ## Theme & Design
 - **Colors**: Material 3-inspired (primary, secondary, tertiary, error, surfaces)
@@ -106,6 +110,7 @@ App Open → _layout (fonts + i18n init) → splash.tsx
 - `eas build --profile universal-apk` for production APK (arm64-v8a)
 - `npx expo start` for development
 - Portrait only, Android target
+- After adding/updating `expo-speech-recognition` (or its app.json plugin), rebuild the dev client / APK — Expo Go cannot load the native module. Plugin adds RECORD_AUDIO + speech service visibility queries; iOS gets mic/speech usage strings.
 
 ## Backend (khata-flow-api)
 Separate Laravel 13 project at `D:\dukandar\khata-flow-api`. See its AGENTS.md for full context. Key points:

@@ -167,6 +167,12 @@ export default function DashboardScreen() {
               </View>
               <Text style={styles.actionText}>{t('dashboard.newBill')}</Text>
             </TouchableOpacity>
+            <TouchableOpacity style={styles.actionBtn} activeOpacity={0.8} onPress={() => (router as any).push('/bill/voice')}>
+              <View style={[styles.actionIcon, { backgroundColor: '#059669' }]}>
+                <Ionicons name="mic" size={28} color="#fff" />
+              </View>
+              <Text style={styles.actionText}>{t('dashboard.voiceBill')}</Text>
+            </TouchableOpacity>
             <TouchableOpacity style={styles.actionBtn} activeOpacity={0.8} onPress={() => (router as any).push('/bill/history')}>
               <View style={[styles.actionIcon, { backgroundColor: '#7c3aed' }]}>
                 <Ionicons name="time" size={28} color="#fff" />

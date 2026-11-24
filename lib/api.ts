@@ -271,6 +271,31 @@ export interface CustomRangeReport {
   }>;
 }
 
+// ─── Voice billing types ──────────────────────────────────────────
+
+export interface VoiceParseItem {
+  product_uuid: string | null;
+  name: string;
+  price: number;
+  quantity: number;
+  unit: string;
+  gst_rate: number;
+  confidence: number;
+  resolved: boolean;
+  spoken_name: string;
+}
+
+export interface VoiceParseResult {
+  items: VoiceParseItem[];
+  customer: { uuid: string; name: string; phone: string | null } | null;
+  customer_name: string;
+  payment_method: 'cash' | 'upi' | 'card' | 'credit' | 'mix';
+  discount: { type: 'percentage' | 'fixed'; value: number } | null;
+  notes: string;
+  assistant_reply: string;
+  source: string;
+}
+
 // ─── Phase 3: Expense types ────────────────────────────────────────
 
 export interface ExpenseData {
@@ -571,6 +596,13 @@ export const api = {
     return request<BillDetail>('/bills', {
       method: 'POST',
       body: JSON.stringify(data),
+    }, token);
+  },
+
+  parseVoiceBill(token: string, transcript: string, language: 'hi' | 'en' = 'hi') {
+    return request<VoiceParseResult>('/voice/parse', {
+      method: 'POST',
+      body: JSON.stringify({ transcript, language }),
     }, token);
   },
 

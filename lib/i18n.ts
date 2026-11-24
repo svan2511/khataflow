@@ -23,7 +23,7 @@ async function getStoredLanguage(): Promise<string> {
   return preferred ? 'hi' : 'en';
 }
 
-let initPromise: Promise<typeof i18next> | null = null;
+let initPromise: Promise<unknown> | null = null;
 
 export async function initI18n() {
   if (initPromise) return initPromise;

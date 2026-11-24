@@ -6,6 +6,7 @@ export default function BillLayout() {
     <BillProvider>
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="index" />
+        <Stack.Screen name="voice" />
         <Stack.Screen name="items" />
         <Stack.Screen name="search" />
         <Stack.Screen name="review" />
