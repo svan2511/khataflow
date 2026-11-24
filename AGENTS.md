@@ -76,7 +76,7 @@ App Open → _layout (fonts + i18n init) → splash.tsx
 
 ## Key Features
 - **Billing**: 5% GST, PDF invoice with amount-in-words, WhatsApp sharing via Android intent
-- **Voice Billing**: `app/bill/voice.tsx` (entry: dashboard "Voice Bill" quick action) records Hindi/English speech with `expo-speech-recognition`, sends the transcript to `POST /api/voice/parse` via `api.parseVoiceBill()`, lets the user edit the draft (items/qty/customer/payment/discount), then fills BillContext and opens the normal `/bill/review` screen. Unresolved products must be matched (or removed) before review. On API failure it falls back to `lib/voice-parser.ts` + `source: 'local'`.
+- **Voice Billing**: `app/bill/voice.tsx` (entry: dashboard "Voice Bill" quick action) records Hindi/English speech with `expo-speech-recognition`, sends the transcript to `POST /api/voice/parse` via `api.parseVoiceBill()`, lets the user edit the draft (items/qty/customer/payment/discount), then creates the bill directly from the draft screen (`POST /bills`, one confirm tap — no separate review screen). Unresolved products can be matched, given a manual price (custom bill item via `product_name` + `unit_price`, no catalog product needed), or removed; Udhaar without a matched customer offers one-tap quick-create via `/customers/quick`. On API failure it falls back to `lib/voice-parser.ts` + `source: 'local'`.
 - **Udhaar (Credit)**: Track customer credit, due amounts, payment recording
 - **Stock Management**: Real-time tracking, low-stock alerts
 - **Customers**: Search, credit history, quick add

@@ -17,7 +17,6 @@ import { useTranslation } from 'react-i18next';
 import { ExpoSpeechRecognitionModule, useSpeechRecognitionEvent } from 'expo-speech-recognition';
 import { Tokens, Typography, Spacing, BorderRadius } from '@/constants/theme';
 import { useAuth } from '@/lib/auth-context';
-import { useBill } from '@/lib/bill-context';
 import {
   api,
   apiErrorMessage,
@@ -32,7 +31,7 @@ import Loader from '@/components/Loader';
 
 type Language = 'hi' | 'en';
 type PickerMode = 'product' | 'customer';
-type DraftItem = VoiceParseItem & { key: string };
+type DraftItem = VoiceParseItem & { key: string; priceText?: string };
 
 const PAYMENT_OPTIONS = [
   { key: 'cash', labelKey: 'paymentMethods.cash', icon: 'cash' },
@@ -41,36 +40,26 @@ const PAYMENT_OPTIONS = [
   { key: 'credit', labelKey: 'paymentMethods.udhaar', icon: 'book' },
 ] as const;
 
-const BILL_PAYMENT_MAP: Record<string, string> = {
-  cash: 'Cash',
-  upi: 'UPI',
-  card: 'Card',
-  credit: 'Udhaar',
-  mix: 'Cash',
-};
-
 function formatMoney(value: number): string {
   return value.toFixed(2).replace(/\.00$/, '');
+}
+
+function round2(value: number): number {
+  return Math.round(value * 100) / 100;
 }
 
 export default function VoiceBillScreen() {
   const { t } = useTranslation();
   const { token } = useAuth();
   const insets = useSafeAreaInsets();
-  const {
-    addItem,
-    setCustomer: setBillCustomer,
-    setPaymentMode,
-    setDiscount: setBillDiscount,
-    setNotes,
-    resetBill,
-  } = useBill();
 
   const [language, setLanguage] = useState<Language>(() => (getCurrentLanguage() === 'en' ? 'en' : 'hi'));
   const [listening, setListening] = useState(false);
   const [transcript, setTranscript] = useState('');
   const [interim, setInterim] = useState('');
   const [parsing, setParsing] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [creatingCustomer, setCreatingCustomer] = useState(false);
   const [error, setError] = useState('');
   const [parsedResult, setParsedResult] = useState<VoiceParseResult | null>(null);
   const [items, setItems] = useState<DraftItem[]>([]);
@@ -90,6 +79,8 @@ export default function VoiceBillScreen() {
   const transcriptRef = useRef('');
   const interimRef = useRef('');
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const creatingRef = useRef(false);
+  const creatingCustomerRef = useRef(false);
 
   const updateTranscript = (value: string) => {
     transcriptRef.current = value;
@@ -227,7 +218,6 @@ export default function VoiceBillScreen() {
         const local = parseBillLocally(text, language, productsRes.data, customersRes.data);
         if (local.items.length) {
           applyResult(local);
-          setError(t('voice.usedLocalFallback'));
         } else {
           setError(apiErrorMessage(e, t('voice.parseFailed')));
         }
@@ -260,8 +250,12 @@ export default function VoiceBillScreen() {
 
   const openPicker = (mode: PickerMode, index: number | null = null) => {
     setPicker({ visible: true, mode, index });
-    setPickerQuery('');
-    loadOptions(mode, '');
+    const initialQuery =
+      mode === 'product' && index !== null
+        ? items[index]?.spoken_name || items[index]?.name || ''
+        : '';
+    setPickerQuery(initialQuery);
+    loadOptions(mode, initialQuery);
   };
 
   const closePicker = () => setPicker(prev => ({ ...prev, visible: false }));
@@ -285,6 +279,7 @@ export default function VoiceBillScreen() {
               product_uuid: product.id,
               name: product.name,
               price: Number(product.price) || 0,
+              priceText: undefined,
               unit: product.unit || item.unit,
               gst_rate: 0,
               confidence: 1,
@@ -315,47 +310,103 @@ export default function VoiceBillScreen() {
     setItems(prev => prev.filter((_, i) => i !== index));
   };
 
-  const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  const updatePrice = (index: number, value: string) => {
+    const cleaned = value.replace(/[^0-9.]/g, '');
+    const [whole, ...rest] = cleaned.split('.');
+    const priceText = rest.length > 0 ? `${whole}.${rest.join('').slice(0, 2)}` : whole;
+    const parsed = Number(priceText);
+    const price = Number.isFinite(parsed) ? Math.min(999999, Math.max(0, parsed)) : 0;
+    setItems(prev =>
+      prev.map((item, i) => (i === index ? { ...item, price, priceText } : item)),
+    );
+  };
+
+  const subtotal = round2(items.reduce((sum, item) => sum + item.price * item.quantity, 0));
   const discountAmount = discount
     ? discount.type === 'percentage'
-      ? subtotal * (discount.value / 100)
-      : Math.min(discount.value, subtotal)
+      ? round2(subtotal * (discount.value / 100))
+      : round2(Math.min(discount.value, subtotal))
     : 0;
-  const taxAmount = items.reduce((sum, item) => sum + (item.price * item.quantity * item.gst_rate) / 100, 0);
-  const grandTotal = Math.max(0, subtotal - discountAmount + taxAmount);
-  const unresolvedCount = items.filter(item => !item.resolved).length;
-  const canReview = items.length > 0 && unresolvedCount === 0;
+  const taxAmount = round2(
+    items.reduce((sum, item) => sum + (item.price * item.quantity * item.gst_rate) / 100, 0),
+  );
+  const grandTotal = round2(Math.max(0, subtotal - discountAmount + taxAmount));
+  const isItemReady = (item: DraftItem) => item.resolved || item.price > 0;
+  const notReadyCount = items.filter(item => !isItemReady(item)).length;
+  const customerName = (parsedResult?.customer_name ?? '').trim();
+  const canCreate =
+    items.length > 0 &&
+    notReadyCount === 0 &&
+    (payment !== 'credit' || !!parsedCustomer) &&
+    !creating;
 
-  const handleReview = () => {
-    if (!canReview) {
-      setError(t('voice.resolveAll', { count: unresolvedCount }));
+  const createCustomer = async (name = customerName) => {
+    const cleanName = name.trim();
+    if (!token || !cleanName || creatingCustomerRef.current) return;
+    creatingCustomerRef.current = true;
+    setCreatingCustomer(true);
+    setError('');
+    try {
+      const res = await api.quickAddCustomer(token, { name: cleanName });
+      setParsedCustomer({ uuid: res.data.id, name: res.data.name, phone: res.data.phone });
+      closePicker();
+    } catch (e) {
+      closePicker();
+      setError(apiErrorMessage(e, t('voice.createFailed')));
+    } finally {
+      creatingCustomerRef.current = false;
+      setCreatingCustomer(false);
+    }
+  };
+
+  const handleCreate = async () => {
+    if (creatingRef.current || !token) return;
+    if (items.length === 0) {
+      setError(t('voice.speakFirst'));
       return;
     }
-    resetBill();
-    items.forEach((item, index) => {
-      addItem({
-        id: item.product_uuid ?? `voice-${Date.now()}-${index}`,
-        product_uuid: item.product_uuid ?? undefined,
-        name: item.name,
-        rate: item.price,
-        quantity: item.quantity,
-        unit: item.unit,
-        gstRate: item.gst_rate || undefined,
+    if (notReadyCount > 0) {
+      setError(t('voice.priceRequired', { count: notReadyCount }));
+      return;
+    }
+    if (payment === 'credit' && !parsedCustomer) {
+      setError(t('voice.customerRequiredForUdhaar'));
+      return;
+    }
+    creatingRef.current = true;
+    setCreating(true);
+    setError('');
+    try {
+      const payload: any = {
+        items: items.map(item => ({
+          ...(item.product_uuid
+            ? { product_uuid: item.product_uuid }
+            : { product_name: item.name, unit_price: item.price }
+          ),
+          quantity: item.quantity,
+          ...(item.gst_rate ? { gst_rate: item.gst_rate } : {}),
+        })),
+        payment_method: payment,
+      };
+      if (payment === 'credit') payload.paid_amount = 0;
+      if (parsedCustomer?.uuid) payload.customer_uuid = parsedCustomer.uuid;
+      if (discount) {
+        payload.discount_type = discount.type;
+        payload.discount_value = discount.value;
+      }
+      if (parsedResult?.notes) payload.notes = parsedResult.notes;
+
+      const res = await api.createBill(token, payload);
+      (router as any).replace({
+        pathname: '/bill/success',
+        params: { bill: JSON.stringify(res.data) },
       });
-    });
-    setBillCustomer(
-      parsedCustomer
-        ? {
-            uuid: parsedCustomer.uuid,
-            name: parsedCustomer.name,
-            phone: parsedCustomer.phone ?? undefined,
-          }
-        : null,
-    );
-    setPaymentMode(BILL_PAYMENT_MAP[payment] ?? 'Cash');
-    setBillDiscount(discount ? { type: discount.type, value: discount.value } : null);
-    setNotes(parsedResult?.notes ?? '');
-    router.push('/bill/review');
+    } catch (e) {
+      setError(apiErrorMessage(e, t('voice.createFailed')));
+    } finally {
+      creatingRef.current = false;
+      setCreating(false);
+    }
   };
 
   const startNewCapture = () => {
@@ -365,10 +416,16 @@ export default function VoiceBillScreen() {
     setParsedResult(null);
     setItems([]);
     setParsedCustomer(null);
+    setPayment('cash');
     setDiscount(null);
   };
 
   const pickerData = picker.mode === 'product' ? productOptions : customerOptions;
+  const pickerCustomerName = picker.mode === 'customer' ? pickerQuery.trim() : '';
+  const hasExactCustomer = customerOptions.some(
+    customer => customer.name.trim().toLowerCase() === pickerCustomerName.toLowerCase(),
+  );
+  const canQuickCreateCustomer = pickerCustomerName.length >= 2 && !hasExactCustomer;
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
@@ -394,7 +451,7 @@ export default function VoiceBillScreen() {
 
       <ScrollView
         style={styles.scrollArea}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + Spacing.xl }]}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + (items.length > 0 ? 170 : Spacing.xl) }]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
@@ -467,7 +524,7 @@ export default function VoiceBillScreen() {
           )}
         </TouchableOpacity>
 
-        {error ? (
+        {error && items.length === 0 ? (
           <View style={styles.errorCard}>
             <Ionicons name="alert-circle" size={18} color={Tokens.tertiary} />
             <Text style={styles.errorText}>{error}</Text>
@@ -497,44 +554,59 @@ export default function VoiceBillScreen() {
               </View>
             ) : null}
 
-            {items.map((item, index) => (
-              <View key={item.key} style={styles.itemCard}>
-                <View style={[styles.itemStatus, item.resolved ? styles.itemStatusOk : styles.itemStatusWarn]}>
-                  <Ionicons
-                    name={item.resolved ? 'checkmark' : 'help'}
-                    size={16}
-                    color={item.resolved ? Tokens.secondary : Tokens.tertiary}
-                  />
-                </View>
-                <View style={styles.itemBody}>
-                  <Text style={styles.itemName}>{item.name}</Text>
-                  <Text style={styles.itemMeta}>
-                    {item.price > 0 ? `₹${formatMoney(item.price)} / ${item.unit}` : t('voice.priceMissing')}
-                  </Text>
-                  {!item.resolved ? (
-                    <TouchableOpacity style={styles.chooseProductBtn} onPress={() => openPicker('product', index)}>
-                      <Ionicons name="search" size={14} color={Tokens.secondary} />
-                      <Text style={styles.chooseProductText}>{t('voice.chooseProduct')}</Text>
-                    </TouchableOpacity>
-                  ) : null}
-                </View>
-                <View style={styles.itemRight}>
-                  <View style={styles.qtyRow}>
-                    <TouchableOpacity style={styles.qtyBtn} onPress={() => updateQuantity(index, -1)}>
-                      <Ionicons name="remove" size={16} color={Tokens['on-surface']} />
-                    </TouchableOpacity>
-                    <Text style={styles.qtyValue}>{item.quantity}</Text>
-                    <TouchableOpacity style={styles.qtyBtn} onPress={() => updateQuantity(index, 1)}>
-                      <Ionicons name="add" size={16} color={Tokens['on-surface']} />
-                    </TouchableOpacity>
+            {items.map((item, index) => {
+              const ready = isItemReady(item);
+              return (
+                <View key={item.key} style={styles.itemCard}>
+                  <View style={[styles.itemStatus, ready ? styles.itemStatusOk : styles.itemStatusWarn]}>
+                    <Ionicons
+                      name={ready ? 'checkmark' : 'help'}
+                      size={16}
+                      color={ready ? Tokens.secondary : Tokens.tertiary}
+                    />
                   </View>
-                  <Text style={styles.itemTotal}>₹{formatMoney(item.price * item.quantity)}</Text>
+                  <View style={styles.itemBody}>
+                    <Text style={styles.itemName}>{item.name}</Text>
+                    {item.resolved ? (
+                      <Text style={styles.itemMeta}>
+                        ₹{formatMoney(item.price)} / {item.unit}
+                      </Text>
+                    ) : (
+                      <>
+                        <TextInput
+                          style={styles.priceInput}
+                          value={item.priceText ?? (item.price > 0 ? String(item.price) : '')}
+                          onChangeText={value => updatePrice(index, value)}
+                          placeholder={t('voice.pricePlaceholder')}
+                          placeholderTextColor={Tokens['on-surface-variant']}
+                          keyboardType="decimal-pad"
+                          maxLength={7}
+                        />
+                        <TouchableOpacity style={styles.chooseProductBtn} onPress={() => openPicker('product', index)}>
+                          <Ionicons name="search" size={14} color={Tokens.secondary} />
+                          <Text style={styles.chooseProductText}>{t('voice.chooseProduct')}</Text>
+                        </TouchableOpacity>
+                      </>
+                    )}
+                  </View>
+                  <View style={styles.itemRight}>
+                    <View style={styles.qtyRow}>
+                      <TouchableOpacity style={styles.qtyBtn} onPress={() => updateQuantity(index, -1)}>
+                        <Ionicons name="remove" size={16} color={Tokens['on-surface']} />
+                      </TouchableOpacity>
+                      <Text style={styles.qtyValue}>{item.quantity}</Text>
+                      <TouchableOpacity style={styles.qtyBtn} onPress={() => updateQuantity(index, 1)}>
+                        <Ionicons name="add" size={16} color={Tokens['on-surface']} />
+                      </TouchableOpacity>
+                    </View>
+                    <Text style={styles.itemTotal}>₹{formatMoney(item.price * item.quantity)}</Text>
+                  </View>
+                  <TouchableOpacity style={styles.removeBtn} onPress={() => removeItem(index)}>
+                    <Ionicons name="close" size={16} color={Tokens['on-surface-variant']} />
+                  </TouchableOpacity>
                 </View>
-                <TouchableOpacity style={styles.removeBtn} onPress={() => removeItem(index)}>
-                  <Ionicons name="close" size={16} color={Tokens['on-surface-variant']} />
-                </TouchableOpacity>
-              </View>
-            ))}
+              );
+            })}
 
             <TouchableOpacity style={styles.customerCard} onPress={() => openPicker('customer')}>
               <View style={styles.customerIcon}>
@@ -572,9 +644,40 @@ export default function VoiceBillScreen() {
                 ))}
               </View>
               {payment === 'credit' && !parsedCustomer ? (
-                <View style={styles.customerHint}>
-                  <Ionicons name="alert-circle-outline" size={14} color={Tokens.tertiary} />
-                  <Text style={styles.customerHintText}>{t('voice.udhaarNeedsCustomer')}</Text>
+                <View style={styles.udhaarActions}>
+                  <View style={styles.customerHint}>
+                    <Ionicons name="alert-circle-outline" size={14} color={Tokens.tertiary} />
+                    <Text style={styles.customerHintText}>
+                      {customerName
+                        ? t('voice.customerNotFound', { name: customerName })
+                        : t('voice.udhaarNeedsCustomer')}
+                    </Text>
+                  </View>
+                  <View style={styles.udhaarActionRow}>
+                    {customerName ? (
+                      <TouchableOpacity
+                        style={styles.udhaarBtn}
+                        onPress={() => createCustomer()}
+                        disabled={creatingCustomer}
+                      >
+                        {creatingCustomer ? (
+                          <Loader size={20} color={Tokens['on-primary']} />
+                        ) : (
+                          <>
+                            <Ionicons name="person-add" size={16} color={Tokens['on-primary']} />
+                            <Text style={styles.udhaarBtnText} numberOfLines={1}>
+                              {t('voice.createCustomer')}
+                            </Text>
+                          </>
+                        )}
+                      </TouchableOpacity>
+                    ) : null}
+                    <TouchableOpacity style={styles.udhaarBtnOutline} onPress={() => openPicker('customer')}>
+                      <Text style={styles.udhaarBtnOutlineText}>
+                        {customerName ? t('voice.selectExisting') : t('voice.chooseOrCreateCustomer')}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
               ) : null}
             </View>
@@ -618,27 +721,48 @@ export default function VoiceBillScreen() {
               </View>
             </View>
 
-            {unresolvedCount > 0 ? (
+            {notReadyCount > 0 ? (
               <View style={styles.unresolvedHint}>
                 <Ionicons name="information-circle-outline" size={16} color={Tokens.tertiary} />
                 <Text style={styles.unresolvedHintText}>
-                  {t('voice.unresolvedHint', { count: unresolvedCount })}
+                  {t('voice.unresolvedHint', { count: notReadyCount })}
                 </Text>
               </View>
             ) : null}
-
-            <TouchableOpacity
-              style={[styles.reviewBtn, !canReview && styles.btnDisabled]}
-              onPress={handleReview}
-              disabled={!canReview}
-              activeOpacity={0.9}
-            >
-              <Text style={styles.reviewBtnText}>{t('voice.reviewAndCreate')}</Text>
-              <Ionicons name="arrow-forward" size={18} color={Tokens['on-primary']} />
-            </TouchableOpacity>
           </View>
         )}
       </ScrollView>
+
+      {items.length > 0 ? (
+        <View style={[styles.bottomBar, { paddingBottom: insets.bottom + Spacing.sm }]}>
+          {error ? (
+            <Text style={styles.bottomError} numberOfLines={2}>
+              {error}
+            </Text>
+          ) : null}
+          <View style={styles.bottomRow}>
+            <View style={styles.bottomSummary}>
+              <Text style={styles.bottomLabel}>{t('bill.amountToCollect')}</Text>
+              <Text style={styles.bottomAmount}>₹{formatMoney(grandTotal)}</Text>
+            </View>
+            <TouchableOpacity
+              style={[styles.createBtn, (!canCreate || creating) && styles.btnDisabled]}
+              onPress={handleCreate}
+              disabled={!canCreate || creating}
+              activeOpacity={0.9}
+            >
+              {creating ? (
+                <Loader size={20} color={Tokens['on-primary']} />
+              ) : (
+                <>
+                  <Text style={styles.createBtnText}>{t('voice.createBill')}</Text>
+                  <Ionicons name="checkmark-circle" size={18} color={Tokens['on-primary']} />
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      ) : null}
 
       <Modal visible={picker.visible} transparent animationType="slide" onRequestClose={closePicker}>
         <View style={styles.modalOverlay}>
@@ -664,6 +788,45 @@ export default function VoiceBillScreen() {
               autoCorrect={false}
             />
             <ScrollView style={styles.pickerList} keyboardShouldPersistTaps="handled">
+              {picker.mode === 'customer' ? (
+                <TouchableOpacity
+                  style={styles.pickerRow}
+                  onPress={() => {
+                    setParsedCustomer(null);
+                    closePicker();
+                  }}
+                >
+                  <View style={styles.createCustomerIcon}>
+                    <Ionicons name="walk" size={16} color={Tokens.secondary} />
+                  </View>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={styles.pickerRowTitle}>{t('bill.walkInCustomer')}</Text>
+                  </View>
+                  {!parsedCustomer ? (
+                    <Ionicons name="checkmark-circle" size={20} color={Tokens.secondary} />
+                  ) : null}
+                </TouchableOpacity>
+              ) : null}
+              {canQuickCreateCustomer ? (
+                <TouchableOpacity
+                  style={styles.pickerRow}
+                  onPress={() => createCustomer(pickerCustomerName)}
+                  disabled={creatingCustomer}
+                >
+                  <View style={styles.createCustomerIcon}>
+                    <Ionicons name="person-add" size={16} color={Tokens.secondary} />
+                  </View>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={styles.pickerRowTitle} numberOfLines={1}>{t('voice.createCustomer')}</Text>
+                    <Text style={styles.pickerRowMeta} numberOfLines={1}>{pickerCustomerName}</Text>
+                  </View>
+                  {creatingCustomer ? (
+                    <Loader size={18} color={Tokens.secondary} />
+                  ) : (
+                    <Ionicons name="add-circle" size={20} color={Tokens.secondary} />
+                  )}
+                </TouchableOpacity>
+              ) : null}
               {pickerLoading ? (
                 <View style={styles.pickerLoading}>
                   <Loader size={22} color={Tokens.secondary} />
@@ -839,6 +1002,11 @@ const styles = StyleSheet.create({
   itemBody: { flex: 1, minWidth: 0, gap: 2 },
   itemName: { fontSize: Typography['body-md'].fontSize, fontWeight: '600', color: Tokens['on-surface'] },
   itemMeta: { fontSize: Typography['label-md'].fontSize, color: Tokens['on-surface-variant'] },
+  priceInput: {
+    height: 38, borderRadius: BorderRadius.lg, backgroundColor: Tokens['surface'],
+    paddingHorizontal: Spacing.sm, fontSize: Typography['body-md'].fontSize,
+    color: Tokens['on-surface'], borderWidth: 1, borderColor: Tokens['outline-variant'],
+  },
   chooseProductBtn: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 2 },
   chooseProductText: { fontSize: Typography['label-md'].fontSize, fontWeight: '600', color: Tokens.secondary },
   itemRight: { alignItems: 'flex-end', gap: 4 },
@@ -890,6 +1058,25 @@ const styles = StyleSheet.create({
   customerHintText: {
     fontSize: Typography['label-md'].fontSize, color: Tokens['on-tertiary-fixed-variant'], flex: 1,
   },
+  udhaarActions: { gap: 6 },
+  udhaarActionRow: { flexDirection: 'row', gap: 6 },
+  udhaarBtn: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+    height: 40, borderRadius: BorderRadius.lg, backgroundColor: Tokens['primary-container'],
+    paddingHorizontal: Spacing.sm,
+  },
+  udhaarBtnText: {
+    fontSize: Typography['label-md'].fontSize, fontWeight: '600',
+    color: Tokens['on-primary'], flexShrink: 1,
+  },
+  udhaarBtnOutline: {
+    flex: 1, alignItems: 'center', justifyContent: 'center',
+    height: 40, borderRadius: BorderRadius.lg,
+    borderWidth: 1, borderColor: Tokens['outline-variant'],
+  },
+  udhaarBtnOutlineText: {
+    fontSize: Typography['label-md'].fontSize, fontWeight: '600', color: Tokens['on-surface-variant'],
+  },
   discountRow: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
     backgroundColor: Tokens['tertiary-fixed'], borderRadius: BorderRadius.xl, padding: Spacing.sm,
@@ -913,11 +1100,29 @@ const styles = StyleSheet.create({
     backgroundColor: Tokens['tertiary-fixed'], borderRadius: BorderRadius.lg, padding: Spacing.sm,
   },
   unresolvedHintText: { fontSize: Typography['label-md'].fontSize, color: Tokens['on-tertiary-fixed-variant'], flex: 1 },
-  reviewBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-    height: 56, borderRadius: BorderRadius.xl, backgroundColor: Tokens['primary-container'],
+  bottomBar: {
+    position: 'absolute', left: 0, right: 0, bottom: 0,
+    backgroundColor: Tokens['surface-container-lowest'],
+    paddingHorizontal: Spacing.gutter, paddingTop: Spacing.sm, gap: 6,
+    borderTopWidth: 1, borderTopColor: Tokens['outline-variant'],
+    shadowColor: Tokens['surface-tint'], shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.08, shadowRadius: 12, elevation: 8,
   },
-  reviewBtnText: {
+  bottomRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md },
+  bottomError: {
+    fontSize: Typography['label-md'].fontSize, color: Tokens.error,
+  },
+  bottomSummary: { flex: 1 },
+  bottomLabel: { fontSize: Typography['label-md'].fontSize, color: Tokens['on-surface-variant'] },
+  bottomAmount: {
+    fontSize: Typography['headline-sm'].fontSize, fontWeight: '700', color: Tokens['on-surface'],
+  },
+  createBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    height: 52, paddingHorizontal: Spacing.lg, borderRadius: BorderRadius.xl,
+    backgroundColor: Tokens['primary-container'],
+  },
+  createBtnText: {
     fontSize: Typography['label-lg'].fontSize,
     fontWeight: Typography['label-lg'].fontWeight as any,
     color: Tokens['on-primary'],
@@ -948,4 +1153,9 @@ const styles = StyleSheet.create({
   },
   pickerRowTitle: { fontSize: Typography['body-md'].fontSize, fontWeight: '600', color: Tokens['on-surface'] },
   pickerRowMeta: { fontSize: Typography['label-md'].fontSize, color: Tokens['on-surface-variant'] },
+  createCustomerIcon: {
+    width: 32, height: 32, borderRadius: 16, backgroundColor: Tokens['secondary-fixed'],
+    alignItems: 'center', justifyContent: 'center',
+  },
 });
+
