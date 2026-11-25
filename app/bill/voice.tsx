@@ -26,6 +26,7 @@ import {
   type VoiceParseResult,
 } from '@/lib/api';
 import { parseBillLocally } from '@/lib/voice-parser';
+import { useBill } from '@/lib/bill-context';
 import { getCurrentLanguage } from '@/lib/i18n';
 import Loader from '@/components/Loader';
 
@@ -52,13 +53,20 @@ export default function VoiceBillScreen() {
   const { t } = useTranslation();
   const { token } = useAuth();
   const insets = useSafeAreaInsets();
+  const {
+    resetBill,
+    addItem,
+    setCustomer: setBillCustomer,
+    setPaymentMode: setBillPaymentMode,
+    setDiscount: setBillDiscount,
+    setNotes: setBillNotes,
+  } = useBill();
 
   const [language, setLanguage] = useState<Language>(() => (getCurrentLanguage() === 'en' ? 'en' : 'hi'));
   const [listening, setListening] = useState(false);
   const [transcript, setTranscript] = useState('');
   const [interim, setInterim] = useState('');
   const [parsing, setParsing] = useState(false);
-  const [creating, setCreating] = useState(false);
   const [creatingCustomer, setCreatingCustomer] = useState(false);
   const [error, setError] = useState('');
   const [parsedResult, setParsedResult] = useState<VoiceParseResult | null>(null);
@@ -79,7 +87,10 @@ export default function VoiceBillScreen() {
   const transcriptRef = useRef('');
   const interimRef = useRef('');
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const creatingRef = useRef(false);
+  const autoParseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const parsingRef = useRef(false);
+  const speechErrorRef = useRef(false);
+  const mountedRef = useRef(true);
   const creatingCustomerRef = useRef(false);
 
   const updateTranscript = (value: string) => {
@@ -92,7 +103,10 @@ export default function VoiceBillScreen() {
     setInterim(value);
   };
 
-  useSpeechRecognitionEvent('start', () => setListening(true));
+  useSpeechRecognitionEvent('start', () => {
+    speechErrorRef.current = false;
+    setListening(true);
+  });
 
   useSpeechRecognitionEvent('end', () => {
     setListening(false);
@@ -101,6 +115,13 @@ export default function VoiceBillScreen() {
       updateInterim('');
       if (!transcriptRef.current) updateTranscript(pending);
     }
+    if (!mountedRef.current || speechErrorRef.current) return;
+    if (autoParseTimer.current) clearTimeout(autoParseTimer.current);
+    autoParseTimer.current = setTimeout(() => {
+      if (!mountedRef.current) return;
+      const text = transcriptRef.current.trim();
+      if (text.length >= 2) void parseText(text);
+    }, 350);
   });
 
   useSpeechRecognitionEvent('result', event => {
@@ -115,6 +136,7 @@ export default function VoiceBillScreen() {
   });
 
   useSpeechRecognitionEvent('error', event => {
+    speechErrorRef.current = true;
     setListening(false);
     updateInterim('');
     const code = event.error;
@@ -133,8 +155,11 @@ export default function VoiceBillScreen() {
   });
 
   useEffect(() => {
+    mountedRef.current = true;
     return () => {
+      mountedRef.current = false;
       if (searchTimer.current) clearTimeout(searchTimer.current);
+      if (autoParseTimer.current) clearTimeout(autoParseTimer.current);
       try {
         ExpoSpeechRecognitionModule.abort();
       } catch {}
@@ -151,6 +176,7 @@ export default function VoiceBillScreen() {
     }
     setError('');
     updateInterim('');
+    if (autoParseTimer.current) clearTimeout(autoParseTimer.current);
     try {
       const permission = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
       if (!permission.granted) {
@@ -166,7 +192,10 @@ export default function VoiceBillScreen() {
         continuous: false,
         maxAlternatives: 1,
         addsPunctuation: true,
-        contextualStrings: ['atta', 'doodh', 'chawal', 'dal', 'cheeni', 'udhaar', 'UPI', 'cash'],
+        contextualStrings: [
+          'chai', 'tea', 'paratha', 'prantha', 'roti', 'lassi', 'raita', 'momos',
+          'atta', 'doodh', 'chawal', 'dal', 'cheeni', 'udhaar', 'UPI', 'cash',
+        ],
       });
       setListening(true);
     } catch {
@@ -174,7 +203,48 @@ export default function VoiceBillScreen() {
     }
   };
 
+  const goToReview = (data: VoiceParseResult) => {
+    resetBill();
+    data.items.forEach((item, index) => {
+      addItem({
+        id: item.product_uuid ?? `voice-${Date.now()}-${index}`,
+        product_uuid: item.product_uuid ?? undefined,
+        name: item.name,
+        rate: Number(item.price) || 0,
+        quantity: Number(item.quantity) || 1,
+        unit: item.unit || 'piece',
+        gstRate: Number(item.gst_rate) || 0,
+      });
+    });
+    setBillCustomer(
+      data.customer
+        ? {
+            uuid: data.customer.uuid,
+            name: data.customer.name,
+            phone: data.customer.phone ?? undefined,
+          }
+        : null,
+    );
+    const modeMap: Record<VoiceParseResult['payment_method'], string> = {
+      cash: 'Cash',
+      upi: 'UPI',
+      card: 'Card',
+      credit: 'Udhaar',
+      mix: 'Cash',
+    };
+    setBillPaymentMode(modeMap[data.payment_method] ?? 'Cash');
+    setBillDiscount(data.discount ? { type: data.discount.type, value: data.discount.value } : null);
+    setBillNotes(data.notes ?? '');
+    router.push('/bill/review');
+  };
+
   const applyResult = (data: VoiceParseResult) => {
+    const allResolved = data.items.length > 0 && data.items.every(item => item.resolved);
+    const creditReady = data.payment_method !== 'credit' || !!data.customer;
+    if (allResolved && creditReady) {
+      goToReview(data);
+      return;
+    }
     setParsedResult(data);
     setItems(
       data.items.map((item, index) => ({
@@ -187,14 +257,16 @@ export default function VoiceBillScreen() {
     setDiscount(data.discount);
   };
 
-  const handleParse = async () => {
-    const text = transcript.trim();
+  const parseText = async (rawText: string) => {
+    const text = rawText.trim();
     if (text.length < 2) {
       setError(t('voice.speakFirst'));
       return;
     }
-    if (!token) return;
+    if (!token || parsingRef.current) return;
 
+    if (autoParseTimer.current) clearTimeout(autoParseTimer.current);
+    parsingRef.current = true;
     setParsing(true);
     setError('');
     setParsedResult(null);
@@ -204,6 +276,7 @@ export default function VoiceBillScreen() {
 
     try {
       const res = await api.parseVoiceBill(token, text, language);
+      if (!mountedRef.current) return;
       if (!res.data.items.length) {
         setError(t('voice.notUnderstood'));
         return;
@@ -215,6 +288,7 @@ export default function VoiceBillScreen() {
           api.searchProducts(token, undefined, 200),
           api.searchCustomers(token, undefined, 100),
         ]);
+        if (!mountedRef.current) return;
         const local = parseBillLocally(text, language, productsRes.data, customersRes.data);
         if (local.items.length) {
           applyResult(local);
@@ -222,11 +296,16 @@ export default function VoiceBillScreen() {
           setError(apiErrorMessage(e, t('voice.parseFailed')));
         }
       } catch {
-        setError(apiErrorMessage(e, t('voice.parseFailed')));
+        if (mountedRef.current) setError(apiErrorMessage(e, t('voice.parseFailed')));
       }
     } finally {
+      parsingRef.current = false;
       setParsing(false);
     }
+  };
+
+  const handleParse = () => {
+    void parseText(transcript);
   };
 
   const loadOptions = async (mode: PickerMode, query: string) => {
@@ -334,11 +413,10 @@ export default function VoiceBillScreen() {
   const isItemReady = (item: DraftItem) => item.resolved || item.price > 0;
   const notReadyCount = items.filter(item => !isItemReady(item)).length;
   const customerName = (parsedResult?.customer_name ?? '').trim();
-  const canCreate =
+  const canReview =
     items.length > 0 &&
     notReadyCount === 0 &&
-    (payment !== 'credit' || !!parsedCustomer) &&
-    !creating;
+    (payment !== 'credit' || !!parsedCustomer);
 
   const createCustomer = async (name = customerName) => {
     const cleanName = name.trim();
@@ -359,8 +437,7 @@ export default function VoiceBillScreen() {
     }
   };
 
-  const handleCreate = async () => {
-    if (creatingRef.current || !token) return;
+  const handleReview = () => {
     if (items.length === 0) {
       setError(t('voice.speakFirst'));
       return;
@@ -373,40 +450,17 @@ export default function VoiceBillScreen() {
       setError(t('voice.customerRequiredForUdhaar'));
       return;
     }
-    creatingRef.current = true;
-    setCreating(true);
-    setError('');
-    try {
-      const payload: any = {
-        items: items.map(item => ({
-          ...(item.product_uuid
-            ? { product_uuid: item.product_uuid }
-            : { product_name: item.name, unit_price: item.price }
-          ),
-          quantity: item.quantity,
-          ...(item.gst_rate ? { gst_rate: item.gst_rate } : {}),
-        })),
-        payment_method: payment,
-      };
-      if (payment === 'credit') payload.paid_amount = 0;
-      if (parsedCustomer?.uuid) payload.customer_uuid = parsedCustomer.uuid;
-      if (discount) {
-        payload.discount_type = discount.type;
-        payload.discount_value = discount.value;
-      }
-      if (parsedResult?.notes) payload.notes = parsedResult.notes;
-
-      const res = await api.createBill(token, payload);
-      (router as any).replace({
-        pathname: '/bill/success',
-        params: { bill: JSON.stringify(res.data) },
-      });
-    } catch (e) {
-      setError(apiErrorMessage(e, t('voice.createFailed')));
-    } finally {
-      creatingRef.current = false;
-      setCreating(false);
-    }
+    const draft: VoiceParseResult = {
+      items: items.map(({ key, priceText, ...item }) => item),
+      customer: parsedCustomer,
+      customer_name: parsedResult?.customer_name ?? parsedCustomer?.name ?? '',
+      payment_method: payment,
+      discount,
+      notes: parsedResult?.notes ?? '',
+      assistant_reply: parsedResult?.assistant_reply ?? '',
+      source: parsedResult?.source ?? 'gemini',
+    };
+    goToReview(draft);
   };
 
   const startNewCapture = () => {
@@ -746,19 +800,13 @@ export default function VoiceBillScreen() {
               <Text style={styles.bottomAmount}>₹{formatMoney(grandTotal)}</Text>
             </View>
             <TouchableOpacity
-              style={[styles.createBtn, (!canCreate || creating) && styles.btnDisabled]}
-              onPress={handleCreate}
-              disabled={!canCreate || creating}
+              style={[styles.createBtn, !canReview && styles.btnDisabled]}
+              onPress={handleReview}
+              disabled={!canReview}
               activeOpacity={0.9}
             >
-              {creating ? (
-                <Loader size={20} color={Tokens['on-primary']} />
-              ) : (
-                <>
-                  <Text style={styles.createBtnText}>{t('voice.createBill')}</Text>
-                  <Ionicons name="checkmark-circle" size={18} color={Tokens['on-primary']} />
-                </>
-              )}
+              <Text style={styles.createBtnText}>{t('bill.reviewBill')}</Text>
+              <Ionicons name="arrow-forward-circle" size={18} color={Tokens['on-primary']} />
             </TouchableOpacity>
           </View>
         </View>

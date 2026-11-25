@@ -45,6 +45,7 @@ const ALIASES: Record<string, string[]> = {
   tel: ['oil', 'तेल'],
   cheeni: ['chini', 'sugar', 'चीनी'],
   chai: ['tea', 'चाय'],
+  parantha: ['paratha', 'parata', 'prantha', 'पराठा', 'परांठा'],
   namak: ['salt', 'नमक'],
   sabun: ['soap', 'साबुन'],
   masala: ['मसाला'],
@@ -70,13 +71,13 @@ const ALIASES: Record<string, string[]> = {
 };
 
 const STOPWORDS = new Set([
-  'aur', 'and', 'plus', 'with', 'ke', 'ka', 'ki', 'ko', 'se', 'me', 'mein', 'par',
+  'aur', 'and', 'or', 'ya', 'yaa', 'plus', 'with', 'ke', 'ka', 'ki', 'ko', 'se', 'me', 'mein', 'par',
   'hai', 'hain', 'he', 'na', 'bhai', 'ji', 'sahab', 'sahib', 'please', 'plz',
   'bill', 'banao', 'bana', 'banaao', 'banaa', 'naya', 'new', 'aaj', 'today',
   'bhej', 'bhejo', 'bhejdo', 'dena', 'dedo', 'chahiye', 'de', 'deejiye',
   'rupaye', 'rupees', 'rupee', 'rs', 'discount', 'chhoot', 'chhut', 'off', 'kam',
   'percent', 'pratishat', 'udhaar', 'udhar', 'udhaari', 'credit', 'cash', 'upi',
-  'card', 'baaki', 'baki', 'customer', 'naam', 'ग्राहक', 'और', 'के', 'का', 'की',
+  'card', 'baaki', 'baki', 'customer', 'naam', 'ग्राहक', 'और', 'या', 'के', 'का', 'की',
   'को', 'से', 'में', 'है', 'हैं', 'ना', 'भाई', 'जी', 'साहब', 'बिल', 'बनाओ',
   'बना', 'नया', 'आज', 'देना', 'देदो', 'चाहिए', 'रुपये', 'रुपए', 'डिस्काउंट',
   'छूट', 'कम', 'उधार', 'उधारी', 'क्रेडिट', 'नकद', 'बाकी', 'नाम',
@@ -103,7 +104,10 @@ function canonicalTokens(tokens: string[]): string[] {
   const found = new Set<string>();
   for (const token of tokens) {
     for (const [canonical, variants] of Object.entries(ALIASES)) {
-      if (token === canonical || variants.includes(token)) found.add(canonical);
+      if (token === canonical || variants.includes(token)) {
+        found.add(canonical);
+        for (const variant of variants) found.add(variant);
+      }
     }
   }
   return Array.from(found);
@@ -118,7 +122,8 @@ function matchProduct(segmentTokens: string[], canonical: string[], products: Pr
       if (token.length >= 3 && !STOPWORDS.has(token) && name.includes(token)) score += 2;
     }
     for (const token of canonical) {
-      if (name.includes(token)) score += 3;
+      if (name === token) score += 6;
+      else if (name.split(' ').includes(token) || name.includes(token)) score += 3;
     }
     if (score > 0 && (!best || score > best.score)) best = { product, score };
   }
@@ -209,7 +214,7 @@ export function parseBillLocally(
   const discount = detectDiscount(transcript);
   const customer = matchCustomer(transcript, customers);
   const segments = normalize(transcript)
-    .split(/[,+&]|\baur\b|\band\b|\bke saath\b|\bwith\b|और/)
+    .split(/[,+&]|\baur\b|\band\b|\bor\b|\bya\b|\bke saath\b|\bwith\b|और|या/)
     .map(part => part.trim())
     .filter(Boolean);
 
