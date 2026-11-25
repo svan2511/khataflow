@@ -131,7 +131,7 @@ export default function VoiceBillScreen() {
       toValue: 1,
       duration: 1200,
       easing: Easing.linear,
-      useNativeDriver: false,
+      useNativeDriver: true,
     }).start(() => {
       if (processing) startLoaderAnimation();
     });
