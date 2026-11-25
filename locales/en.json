@@ -208,7 +208,10 @@
     "noSpeech": "No speech detected. Please try again.",
     "speechNetworkError": "Internet is required for speech recognition.",
     "languageNotSupported": "Speech recognition is not available for this language.",
-    "recognitionFailed": "Could not capture your voice. Please try again."
+    "recognitionFailed": "Could not capture your voice. Please try again.",
+    "addMoreItems": "Add more items by voice",
+    "addedItems": "Items added",
+    "itemAdded": "item(s) added to bill"
   },
   "bill": {
     "newBill": "New Bill",

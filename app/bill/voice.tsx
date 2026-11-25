@@ -239,12 +239,6 @@ export default function VoiceBillScreen() {
   };
 
   const applyResult = (data: VoiceParseResult) => {
-    const allResolved = data.items.length > 0 && data.items.every(item => item.resolved);
-    const creditReady = data.payment_method !== 'credit' || !!data.customer;
-    if (allResolved && creditReady) {
-      goToReview(data);
-      return;
-    }
     setParsedResult(data);
     setItems(
       data.items.map((item, index) => ({

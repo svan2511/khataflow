@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, StyleSheet, TextInput, KeyboardAvoidingView, Platform, Image } from 'react-native';
+import { useState, useEffect, useRef } from 'react';
+import { View, Text, TouchableOpacity, ScrollView, StyleSheet, TextInput, KeyboardAvoidingView, Platform, Image, Alert, Linking } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -10,6 +10,9 @@ import { useToast } from '@/components/toast-provider';
 import { api } from '@/lib/api';
 import Loader from '@/components/Loader';
 import { useTranslation } from 'react-i18next';
+import { ExpoSpeechRecognitionModule, useSpeechRecognitionEvent } from 'expo-speech-recognition';
+import { getCurrentLanguage } from '@/lib/i18n';
+import { parseBillLocally } from '@/lib/voice-parser';
 
 export default function BillReviewScreen() {
   const { t } = useTranslation();
@@ -17,7 +20,7 @@ export default function BillReviewScreen() {
   const {
     items, customer, paymentMode, discount, notes,
     subtotal, discountAmount, taxAmount, grandTotal,
-    setPaymentMode, resetBill,
+    setPaymentMode, resetBill, addItem, setCustomer, setDiscount, setNotes, updateItemQuantity,
   } = useBill();
 
   const PAYMENT_MODES = [
@@ -50,6 +53,238 @@ export default function BillReviewScreen() {
       }).catch(() => {});
     }
   }, [token]);
+
+  // Voice recognition state for "Add More Items"
+  const [voiceLanguage, setVoiceLanguage] = useState<'hi' | 'en'>(() => (getCurrentLanguage() === 'en' ? 'en' : 'hi'));
+  const [voiceListening, setVoiceListening] = useState(false);
+  const [voiceTranscript, setVoiceTranscript] = useState('');
+  const [voiceInterim, setVoiceInterim] = useState('');
+  const [voiceParsing, setVoiceParsing] = useState(false);
+  const [voiceError, setVoiceError] = useState('');
+  const voiceTranscriptRef = useRef('');
+  const voiceInterimRef = useRef('');
+  const voiceAutoParseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const voiceParsingRef = useRef(false);
+  const voiceSpeechErrorRef = useRef(false);
+  const voiceMountedRef = useRef(true);
+
+  const updateVoiceTranscript = (value: string) => {
+    voiceTranscriptRef.current = value;
+    setVoiceTranscript(value);
+  };
+
+  const updateVoiceInterim = (value: string) => {
+    voiceInterimRef.current = value;
+    setVoiceInterim(value);
+  };
+
+  useSpeechRecognitionEvent('start', () => {
+    voiceSpeechErrorRef.current = false;
+    setVoiceListening(true);
+  });
+
+  useSpeechRecognitionEvent('end', () => {
+    setVoiceListening(false);
+    if (voiceInterimRef.current) {
+      const pending = voiceInterimRef.current;
+      updateVoiceInterim('');
+      if (!voiceTranscriptRef.current) updateVoiceTranscript(pending);
+    }
+    if (!voiceMountedRef.current || voiceSpeechErrorRef.current) return;
+    if (voiceAutoParseTimer.current) clearTimeout(voiceAutoParseTimer.current);
+    voiceAutoParseTimer.current = setTimeout(() => {
+      if (!voiceMountedRef.current) return;
+      const text = voiceTranscriptRef.current.trim();
+      if (text.length >= 2) void parseVoiceText(text);
+    }, 350);
+  });
+
+  useSpeechRecognitionEvent('result', event => {
+    const text = event.results[0]?.transcript?.trim() ?? '';
+    if (!text) return;
+    if (event.isFinal) {
+      updateVoiceInterim('');
+      updateVoiceTranscript(voiceTranscriptRef.current ? `${voiceTranscriptRef.current} ${text}`.trim() : text);
+    } else {
+      updateVoiceInterim(text);
+    }
+  });
+
+  useSpeechRecognitionEvent('error', event => {
+    voiceSpeechErrorRef.current = true;
+    setVoiceListening(false);
+    updateVoiceInterim('');
+    const code = event.error;
+    if (code === 'aborted') return;
+    if (code === 'no-speech' || code === 'speech-timeout') {
+      setVoiceError(t('voice.noSpeech'));
+    } else if (code === 'not-allowed' || code === 'service-not-allowed') {
+      setVoiceError(t('voice.micPermissionMessage'));
+    } else if (code === 'network') {
+      setVoiceError(t('voice.speechNetworkError'));
+    } else if (code === 'language-not-supported') {
+      setVoiceError(t('voice.languageNotSupported'));
+    } else {
+      setVoiceError(t('voice.recognitionFailed'));
+    }
+  });
+
+  useEffect(() => {
+    voiceMountedRef.current = true;
+    return () => {
+      voiceMountedRef.current = false;
+      if (voiceAutoParseTimer.current) clearTimeout(voiceAutoParseTimer.current);
+      try {
+        ExpoSpeechRecognitionModule.abort();
+      } catch {}
+    };
+  }, []);
+
+  const toggleVoiceListening = async () => {
+    if (voiceListening) {
+      try {
+        ExpoSpeechRecognitionModule.stop();
+      } catch {}
+      setVoiceListening(false);
+      return;
+    }
+    setVoiceError('');
+    updateVoiceInterim('');
+    if (voiceAutoParseTimer.current) clearTimeout(voiceAutoParseTimer.current);
+    try {
+      const permission = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert(t('voice.micPermissionTitle'), t('voice.micPermissionMessage'), [
+          { text: t('common.cancel'), style: 'cancel' },
+          { text: t('common.settings'), onPress: () => Linking.openSettings() },
+        ]);
+        return;
+      }
+      ExpoSpeechRecognitionModule.start({
+        lang: voiceLanguage === 'hi' ? 'hi-IN' : 'en-IN',
+        interimResults: true,
+        continuous: false,
+        maxAlternatives: 1,
+        addsPunctuation: true,
+        contextualStrings: [
+          'chai', 'tea', 'paratha', 'prantha', 'roti', 'lassi', 'raita', 'momos',
+          'atta', 'doodh', 'chawal', 'dal', 'cheeni', 'udhaar', 'UPI', 'cash',
+        ],
+      });
+      setVoiceListening(true);
+    } catch {
+      setVoiceError(t('voice.recognitionFailed'));
+    }
+  };
+
+  const parseVoiceText = async (rawText: string) => {
+    const text = rawText.trim();
+    if (text.length < 2) {
+      setVoiceError(t('voice.speakFirst'));
+      return;
+    }
+    if (!token || voiceParsingRef.current) return;
+
+    if (voiceAutoParseTimer.current) clearTimeout(voiceAutoParseTimer.current);
+    voiceParsingRef.current = true;
+    setVoiceParsing(true);
+    setVoiceError('');
+
+    try {
+      const res = await api.parseVoiceBill(token, text, voiceLanguage);
+      if (!voiceMountedRef.current) return;
+      if (!res.data.items.length) {
+        setVoiceError(t('voice.notUnderstood'));
+        return;
+      }
+      mergeVoiceResult(res.data);
+    } catch (e) {
+      try {
+        const [productsRes, customersRes] = await Promise.all([
+          api.searchProducts(token, undefined, 200),
+          api.searchCustomers(token, undefined, 100),
+        ]);
+        if (!voiceMountedRef.current) return;
+        const local = parseBillLocally(text, voiceLanguage, productsRes.data, customersRes.data);
+        if (local.items.length) {
+          mergeVoiceResult(local);
+        } else {
+          setVoiceError('Voice parsing failed. Please try again.');
+        }
+      } catch {
+        if (voiceMountedRef.current) setVoiceError('Voice parsing failed. Please try again.');
+      }
+    } finally {
+      voiceParsingRef.current = false;
+      setVoiceParsing(false);
+    }
+  };
+
+  const mergeVoiceResult = (data: any) => {
+    // Add new items to existing bill
+    data.items.forEach((item: any, index: number) => {
+      const itemId = item.product_uuid ?? `voice-${Date.now()}-${index}`;
+      const existingIndex = items.findIndex(i => i.id === itemId);
+      if (existingIndex >= 0) {
+        // Update quantity if same product
+        const currentItem = items[existingIndex];
+        const newQuantity = Number(currentItem.quantity) + Number(item.quantity || 1);
+        updateItemQuantity(itemId, newQuantity);
+      } else {
+        addItem({
+          id: itemId,
+          product_uuid: item.product_uuid ?? undefined,
+          name: item.name,
+          rate: Number(item.price) || 0,
+          quantity: Number(item.quantity) || 1,
+          unit: item.unit || 'piece',
+          gstRate: Number(item.gst_rate) || 0,
+        });
+      }
+    });
+
+    // Update customer if provided and not already set
+    if (data.customer && !customer?.uuid) {
+      setCustomer({
+        uuid: data.customer.uuid,
+        name: data.customer.name,
+        phone: data.customer.phone ?? undefined,
+      });
+    }
+
+    // Update payment mode if provided
+    const modeMap: Record<string, string> = {
+      cash: 'Cash',
+      upi: 'UPI',
+      card: 'Card',
+      credit: 'Udhaar',
+      mix: 'Cash',
+    };
+    if (data.payment_method && modeMap[data.payment_method]) {
+      setPaymentMode(modeMap[data.payment_method]);
+    }
+
+    // Update discount if provided
+    if (data.discount) {
+      setDiscount({ type: data.discount.type, value: data.discount.value });
+    }
+
+    // Update notes if provided
+    if (data.notes) {
+      setNotes(data.notes);
+    }
+
+    // Clear transcript after successful merge
+    updateVoiceTranscript('');
+    updateVoiceInterim('');
+    showToast({
+      type: 'success',
+      title: t('voice.addedItems'),
+      message: `${data.items.length} ${t('voice.itemAdded')}`,
+    });
+  };
+
+  // Need to import addItem, setCustomer, setPaymentMode, setDiscount, setNotes from useBill
 
   const dueAmount = Math.max(0, grandTotal - paidAmount);
   const isPartialPayment = dueAmount > 0 && paymentMode !== 'Udhaar';
@@ -135,11 +370,34 @@ export default function BillReviewScreen() {
           <Ionicons name="arrow-back" size={24} color={Tokens['on-surface-variant']} />
         </TouchableOpacity>
         <Text style={styles.topBarTitle}>{t('bill.reviewBill')}</Text>
-        <View style={{ width: 48 }} />
+        <View style={styles.topBarActions}>
+          <TouchableOpacity
+            style={[styles.iconButton, voiceListening && styles.iconButtonActive]}
+            onPress={toggleVoiceListening}
+            disabled={voiceParsing}
+            activeOpacity={0.85}
+            accessibilityLabel={voiceListening ? t('voice.tapToStop') : t('voice.addMoreItems')}
+          >
+            <Ionicons name={voiceListening ? 'stop' : 'mic'} size={24} color={voiceListening ? '#dc2626' : Tokens['on-surface-variant']} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding" keyboardVerticalOffset={Platform.OS === 'ios' ? 56 : 0}>
       <ScrollView style={styles.scrollArea} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+        {voiceListening || voiceInterim ? (
+          <View style={styles.voiceListeningBar}>
+            <Ionicons name="mic" size={16} color={Tokens.secondary} />
+            <Text style={styles.voiceListeningText}>{voiceInterim || voiceTranscript || t('voice.listening')}</Text>
+            {voiceParsing && <Loader size={14} color={Tokens.secondary} />}
+          </View>
+        ) : null}
+        {voiceError ? (
+          <View style={styles.voiceErrorBar}>
+            <Ionicons name="alert-circle" size={16} color={Tokens.tertiary} />
+            <Text style={styles.voiceErrorText}>{voiceError}</Text>
+          </View>
+        ) : null}
         <View style={styles.billCard}>
           <View style={styles.billHeader}>
             <View style={styles.billLogo}>
@@ -336,7 +594,9 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1, borderBottomColor: Tokens['outline-variant'],
   },
   iconButton: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center', borderRadius: BorderRadius.full },
+  iconButtonActive: { backgroundColor: 'rgba(220, 38, 38, 0.1)' },
   topBarTitle: { fontSize: Typography['headline-sm'].fontSize, fontWeight: Typography['headline-sm'].fontWeight as any, color: Tokens['on-surface'] },
+  topBarActions: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   scrollArea: { flex: 1 },
   scrollContent: { padding: Spacing.gutter, paddingBottom: 180, gap: Spacing.md },
   billCard: {
@@ -410,6 +670,20 @@ const styles = StyleSheet.create({
   },
   confirmBtnDisabled: { opacity: 0.6 },
   confirmBtnText: { fontSize: Typography['label-lg'].fontSize, fontWeight: Typography['label-lg'].fontWeight as any, color: Tokens['on-primary'] },
+
+  // Voice listening indicator
+  voiceListeningBar: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: Tokens['secondary-fixed'], borderRadius: BorderRadius.lg,
+    padding: Spacing.sm, marginBottom: Spacing.sm,
+  },
+  voiceListeningText: { fontSize: Typography['body-md'].fontSize, color: Tokens['on-secondary-fixed-variant'], flex: 1 },
+  voiceErrorBar: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: Tokens['tertiary-fixed'], borderRadius: BorderRadius.lg,
+    padding: Spacing.sm, marginBottom: Spacing.sm,
+  },
+  voiceErrorText: { fontSize: Typography['body-md'].fontSize, color: Tokens['on-tertiary-fixed-variant'], flex: 1 },
 
   // Paid amount section
   paidSection: {
