@@ -160,7 +160,7 @@
     "walkInCustomer": "वॉक-इन ग्राहक",
     "voiceBill": "बोलकर बिल"
   },
-  "voice": {
+"voice": {
     "title": "बोलकर बिल",
     "heroTitle": "बोलिए, बिल तैयार",
     "heroSubtitle": "सामान और मात्रा बोलिए — बिल अपने आप भर जाएगा।",
@@ -211,7 +211,10 @@
     "recognitionFailed": "आवाज़ नहीं पकड़ पाए। फिर कोशिश करें।",
     "addMoreItems": "आवाज़ से और सामान जोड़ें",
     "addedItems": "सामान जुड़ गया",
-    "itemAdded": "आइटम बिल में जुड़ गए"
+    "itemAdded": "आइटम बिल में जुड़ गए",
+    "waitingForMore": "और सुनने का इंतज़ार...",
+    "understandingBill": "आपका बिल समझा जा रहा है...",
+    "pleaseWait": "कृपया प्रतीक्षा करें..."
   },
   "bill": {
     "newBill": "नया बिल",

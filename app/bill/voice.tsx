@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import {
   Alert,
   Linking,
@@ -9,6 +9,8 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  Animated,
+  Easing,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -66,7 +68,8 @@ export default function VoiceBillScreen() {
   const [listening, setListening] = useState(false);
   const [transcript, setTranscript] = useState('');
   const [interim, setInterim] = useState('');
-  const [parsing, setParsing] = useState(false);
+  const [processing, setProcessing] = useState(false);
+  const [processingText, setProcessingText] = useState('');
   const [creatingCustomer, setCreatingCustomer] = useState(false);
   const [error, setError] = useState('');
   const [parsedResult, setParsedResult] = useState<VoiceParseResult | null>(null);
@@ -87,41 +90,102 @@ export default function VoiceBillScreen() {
   const transcriptRef = useRef('');
   const interimRef = useRef('');
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pauseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const autoParseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const parsingRef = useRef(false);
   const speechErrorRef = useRef(false);
   const mountedRef = useRef(true);
   const creatingCustomerRef = useRef(false);
+  const pauseDetectedRef = useRef(false);
 
-  const updateTranscript = (value: string) => {
+  const pulseAnim = useRef(new Animated.Value(0)).current;
+  const loaderAnim = useRef(new Animated.Value(0)).current;
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+
+  const updateTranscript = useCallback((value: string) => {
     transcriptRef.current = value;
     setTranscript(value);
-  };
+  }, []);
 
-  const updateInterim = (value: string) => {
+  const updateInterim = useCallback((value: string) => {
     interimRef.current = value;
     setInterim(value);
-  };
+  }, []);
+
+  const startPulseAnimation = useCallback(() => {
+    pulseAnim.setValue(0);
+    Animated.timing(pulseAnim, {
+      toValue: 1,
+      duration: 1000,
+      easing: Easing.inOut(Easing.ease),
+      useNativeDriver: true,
+    }).start(() => {
+      if (listening) startPulseAnimation();
+    });
+  }, [listening]);
+
+  const startLoaderAnimation = useCallback(() => {
+    loaderAnim.setValue(0);
+    Animated.timing(loaderAnim, {
+      toValue: 1,
+      duration: 1200,
+      easing: Easing.linear,
+      useNativeDriver: true,
+    }).start(() => {
+      if (processing) startLoaderAnimation();
+    });
+  }, [processing]);
+
+  const showFullScreenLoader = useCallback((text: string) => {
+    setProcessingText(text);
+    setProcessing(true);
+    fadeAnim.setValue(0);
+    scaleAnim.setValue(0.9);
+    Animated.parallel([
+      Animated.timing(fadeAnim, { toValue: 1, duration: 200, useNativeDriver: true }),
+      Animated.timing(scaleAnim, { toValue: 1, duration: 300, easing: Easing.out(Easing.back(1.2)), useNativeDriver: true }),
+    ]).start();
+    startLoaderAnimation();
+  }, [startLoaderAnimation]);
+
+  const hideFullScreenLoader = useCallback(() => {
+    Animated.timing(fadeAnim, { toValue: 0, duration: 200, useNativeDriver: true }).start(() => {
+      setProcessing(false);
+      if (pauseTimer.current) clearTimeout(pauseTimer.current);
+    });
+  }, []);
 
   useSpeechRecognitionEvent('start', () => {
     speechErrorRef.current = false;
+    pauseDetectedRef.current = false;
     setListening(true);
+    startPulseAnimation();
   });
 
   useSpeechRecognitionEvent('end', () => {
     setListening(false);
+    pulseAnim.stopAnimation();
     if (interimRef.current) {
       const pending = interimRef.current;
       updateInterim('');
       if (!transcriptRef.current) updateTranscript(pending);
     }
     if (!mountedRef.current || speechErrorRef.current) return;
+    
+    if (pauseTimer.current) clearTimeout(pauseTimer.current);
     if (autoParseTimer.current) clearTimeout(autoParseTimer.current);
-    autoParseTimer.current = setTimeout(() => {
-      if (!mountedRef.current) return;
+    
+    pauseDetectedRef.current = true;
+    pauseTimer.current = setTimeout(() => {
+      if (!mountedRef.current || speechErrorRef.current) return;
       const text = transcriptRef.current.trim();
-      if (text.length >= 2) void parseText(text);
-    }, 350);
+      if (text.length >= 2) {
+        void parseText(text);
+      } else {
+        pauseDetectedRef.current = false;
+      }
+    }, 3000);
   });
 
   useSpeechRecognitionEvent('result', event => {
@@ -130,6 +194,8 @@ export default function VoiceBillScreen() {
     if (event.isFinal) {
       updateInterim('');
       updateTranscript(transcriptRef.current ? `${transcriptRef.current} ${text}`.trim() : text);
+      if (pauseTimer.current) clearTimeout(pauseTimer.current);
+      pauseDetectedRef.current = false;
     } else {
       updateInterim(text);
     }
@@ -139,6 +205,7 @@ export default function VoiceBillScreen() {
     speechErrorRef.current = true;
     setListening(false);
     updateInterim('');
+    if (pauseTimer.current) clearTimeout(pauseTimer.current);
     const code = event.error;
     if (code === 'aborted') return;
     if (code === 'no-speech' || code === 'speech-timeout') {
@@ -156,10 +223,15 @@ export default function VoiceBillScreen() {
 
   useEffect(() => {
     mountedRef.current = true;
+    fadeAnim.setValue(1);
+    Animated.timing(fadeAnim, { toValue: 1, duration: 400, useNativeDriver: true }).start();
     return () => {
       mountedRef.current = false;
       if (searchTimer.current) clearTimeout(searchTimer.current);
+      if (pauseTimer.current) clearTimeout(pauseTimer.current);
       if (autoParseTimer.current) clearTimeout(autoParseTimer.current);
+      pulseAnim.stopAnimation();
+      loaderAnim.stopAnimation();
       try {
         ExpoSpeechRecognitionModule.abort();
       } catch {}
@@ -176,6 +248,7 @@ export default function VoiceBillScreen() {
     }
     setError('');
     updateInterim('');
+    if (pauseTimer.current) clearTimeout(pauseTimer.current);
     if (autoParseTimer.current) clearTimeout(autoParseTimer.current);
     try {
       const permission = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
@@ -238,44 +311,29 @@ export default function VoiceBillScreen() {
     router.push('/bill/review');
   };
 
-  const applyResult = (data: VoiceParseResult) => {
-    setParsedResult(data);
-    setItems(
-      data.items.map((item, index) => ({
-        ...item,
-        key: `${item.product_uuid ?? 'custom'}-${index}-${Date.now()}`,
-      })),
-    );
-    setParsedCustomer(data.customer);
-    setPayment(data.payment_method === 'mix' ? 'cash' : data.payment_method);
-    setDiscount(data.discount);
-  };
-
   const parseText = async (rawText: string) => {
     const text = rawText.trim();
     if (text.length < 2) {
       setError(t('voice.speakFirst'));
+      pauseDetectedRef.current = false;
       return;
     }
     if (!token || parsingRef.current) return;
 
     if (autoParseTimer.current) clearTimeout(autoParseTimer.current);
     parsingRef.current = true;
-    setParsing(true);
-    setError('');
-    setParsedResult(null);
-    setItems([]);
-    setParsedCustomer(null);
-    setDiscount(null);
+    showFullScreenLoader(t('voice.understandingBill'));
 
     try {
       const res = await api.parseVoiceBill(token, text, language);
       if (!mountedRef.current) return;
       if (!res.data.items.length) {
+        hideFullScreenLoader();
         setError(t('voice.notUnderstood'));
         return;
       }
-      applyResult(res.data);
+      hideFullScreenLoader();
+      goToReview(res.data);
     } catch (e) {
       try {
         const [productsRes, customersRes] = await Promise.all([
@@ -285,21 +343,22 @@ export default function VoiceBillScreen() {
         if (!mountedRef.current) return;
         const local = parseBillLocally(text, language, productsRes.data, customersRes.data);
         if (local.items.length) {
-          applyResult(local);
+          hideFullScreenLoader();
+          goToReview(local);
         } else {
+          hideFullScreenLoader();
           setError(apiErrorMessage(e, t('voice.parseFailed')));
         }
       } catch {
-        if (mountedRef.current) setError(apiErrorMessage(e, t('voice.parseFailed')));
+        if (mountedRef.current) {
+          hideFullScreenLoader();
+          setError(apiErrorMessage(e, t('voice.parseFailed')));
+        }
       }
     } finally {
       parsingRef.current = false;
-      setParsing(false);
+      pauseDetectedRef.current = false;
     }
-  };
-
-  const handleParse = () => {
-    void parseText(transcript);
   };
 
   const loadOptions = async (mode: PickerMode, query: string) => {
@@ -475,6 +534,16 @@ export default function VoiceBillScreen() {
   );
   const canQuickCreateCustomer = pickerCustomerName.length >= 2 && !hasExactCustomer;
 
+  const micScale = pulseAnim.interpolate({
+    inputRange: [0, 0.5, 1],
+    outputRange: [1, 1.12, 1],
+  });
+
+  const loaderRotate = loaderAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '360deg'],
+  });
+
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
       <View style={styles.topBar}>
@@ -499,9 +568,10 @@ export default function VoiceBillScreen() {
 
       <ScrollView
         style={styles.scrollArea}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + (items.length > 0 ? 170 : Spacing.xl) }]}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + Spacing.xl }]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
+        scrollEnabled={!processing}
       >
         <View style={styles.heroCard}>
           <View style={styles.heroIconWrap}>
@@ -516,19 +586,31 @@ export default function VoiceBillScreen() {
         </View>
 
         <View style={styles.micSection}>
-          <TouchableOpacity
-            style={[styles.micButton, listening && styles.micButtonActive]}
-            onPress={toggleListening}
-            activeOpacity={0.85}
-            accessibilityRole="button"
-            accessibilityLabel={listening ? t('voice.tapToStop') : t('voice.tapToSpeak')}
-          >
-            <Ionicons name={listening ? 'stop' : 'mic'} size={40} color="#fff" />
-          </TouchableOpacity>
+          <Animated.View style={[styles.micButton, { transform: [{ scale: micScale }] }]}>
+            <TouchableOpacity
+              style={styles.micButtonInner}
+              onPress={toggleListening}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel={listening ? t('voice.tapToStop') : t('voice.tapToSpeak')}
+              disabled={processing}
+            >
+              <Ionicons name={listening ? 'stop' : 'mic'} size={40} color="#fff" />
+            </TouchableOpacity>
+            {listening && (
+              <Animated.View style={styles.pulseRing} />
+            )}
+          </Animated.View>
           <Text style={[styles.micLabel, listening && styles.micLabelActive]}>
             {listening ? t('voice.listening') : t('voice.tapToSpeak')}
           </Text>
-          {interim ? <Text style={styles.interimText}>{interim}</Text> : null}
+          {interim && !processing && <Text style={styles.interimText}>{interim}</Text>}
+          {pauseDetectedRef.current && !processing && (
+            <View style={styles.pauseIndicator}>
+              <Loader size={16} color={Tokens.secondary} />
+              <Text style={styles.pauseText}>{t('voice.waitingForMore')}</Text>
+            </View>
+          )}
         </View>
 
         <View style={styles.transcriptCard}>
@@ -544,7 +626,7 @@ export default function VoiceBillScreen() {
           <TextInput
             style={styles.transcriptInput}
             multiline
-            editable={!listening}
+            editable={!listening && !processing}
             value={transcript}
             onChangeText={updateTranscript}
             placeholder={t('voice.transcriptPlaceholder')}
@@ -553,258 +635,37 @@ export default function VoiceBillScreen() {
           />
         </View>
 
-        <TouchableOpacity
-          style={[styles.parseBtn, (parsing || transcript.trim().length < 2) && styles.btnDisabled]}
-          onPress={handleParse}
-          disabled={parsing || transcript.trim().length < 2}
-          activeOpacity={0.9}
-        >
-          {parsing ? (
-            <>
-              <Loader size={18} color={Tokens['on-primary']} />
-              <Text style={styles.parseBtnText}>{t('voice.parsing')}</Text>
-            </>
-          ) : (
-            <>
-              <Text style={styles.parseBtnText}>{t('voice.understand')}</Text>
-              <Ionicons name="sparkles" size={18} color={Tokens['on-primary']} />
-            </>
-          )}
-        </TouchableOpacity>
-
-        {error && items.length === 0 ? (
+        {error && (
           <View style={styles.errorCard}>
             <Ionicons name="alert-circle" size={18} color={Tokens.tertiary} />
             <Text style={styles.errorText}>{error}</Text>
           </View>
-        ) : null}
+        )}
 
-        {items.length > 0 && (
-          <View style={styles.draftSection}>
-            <View style={styles.draftHeader}>
-              <Text style={styles.sectionTitle}>{t('voice.draft')}</Text>
-              <View style={styles.sourceBadge}>
-                <Ionicons
-                  name={parsedResult?.source === 'local' ? 'phone-portrait-outline' : 'sparkles'}
-                  size={12}
-                  color={Tokens['on-secondary-container']}
-                />
-                <Text style={styles.sourceBadgeText}>
-                  {parsedResult?.source === 'local' ? t('voice.sourceLocal') : t('voice.sourceAi')}
-                </Text>
-              </View>
-            </View>
-
-            {parsedResult?.assistant_reply ? (
-              <View style={styles.assistantCard}>
-                <Ionicons name="chatbubble-ellipses-outline" size={16} color={Tokens.secondary} />
-                <Text style={styles.assistantText}>{parsedResult.assistant_reply}</Text>
-              </View>
-            ) : null}
-
-            {items.map((item, index) => {
-              const ready = isItemReady(item);
-              return (
-                <View key={item.key} style={styles.itemCard}>
-                  <View style={[styles.itemStatus, ready ? styles.itemStatusOk : styles.itemStatusWarn]}>
-                    <Ionicons
-                      name={ready ? 'checkmark' : 'help'}
-                      size={16}
-                      color={ready ? Tokens.secondary : Tokens.tertiary}
-                    />
-                  </View>
-                  <View style={styles.itemBody}>
-                    <Text style={styles.itemName}>{item.name}</Text>
-                    {item.resolved ? (
-                      <Text style={styles.itemMeta}>
-                        ₹{formatMoney(item.price)} / {item.unit}
-                      </Text>
-                    ) : (
-                      <>
-                        <TextInput
-                          style={styles.priceInput}
-                          value={item.priceText ?? (item.price > 0 ? String(item.price) : '')}
-                          onChangeText={value => updatePrice(index, value)}
-                          placeholder={t('voice.pricePlaceholder')}
-                          placeholderTextColor={Tokens['on-surface-variant']}
-                          keyboardType="decimal-pad"
-                          maxLength={7}
-                        />
-                        <TouchableOpacity style={styles.chooseProductBtn} onPress={() => openPicker('product', index)}>
-                          <Ionicons name="search" size={14} color={Tokens.secondary} />
-                          <Text style={styles.chooseProductText}>{t('voice.chooseProduct')}</Text>
-                        </TouchableOpacity>
-                      </>
-                    )}
-                  </View>
-                  <View style={styles.itemRight}>
-                    <View style={styles.qtyRow}>
-                      <TouchableOpacity style={styles.qtyBtn} onPress={() => updateQuantity(index, -1)}>
-                        <Ionicons name="remove" size={16} color={Tokens['on-surface']} />
-                      </TouchableOpacity>
-                      <Text style={styles.qtyValue}>{item.quantity}</Text>
-                      <TouchableOpacity style={styles.qtyBtn} onPress={() => updateQuantity(index, 1)}>
-                        <Ionicons name="add" size={16} color={Tokens['on-surface']} />
-                      </TouchableOpacity>
-                    </View>
-                    <Text style={styles.itemTotal}>₹{formatMoney(item.price * item.quantity)}</Text>
-                  </View>
-                  <TouchableOpacity style={styles.removeBtn} onPress={() => removeItem(index)}>
-                    <Ionicons name="close" size={16} color={Tokens['on-surface-variant']} />
-                  </TouchableOpacity>
-                </View>
-              );
-            })}
-
-            <TouchableOpacity style={styles.customerCard} onPress={() => openPicker('customer')}>
-              <View style={styles.customerIcon}>
-                <Ionicons name="person" size={18} color={Tokens.secondary} />
-              </View>
-              <View style={{ flex: 1, minWidth: 0 }}>
-                <Text style={styles.cardLabel}>{t('voice.customer')}</Text>
-                <Text style={styles.customerName} numberOfLines={1}>
-                  {parsedCustomer?.name || t('bill.walkInCustomer')}
-                </Text>
-              </View>
-              <Text style={styles.changeCustomerText}>
-                {parsedCustomer ? t('voice.changeCustomer') : t('voice.addCustomer')}
-              </Text>
-            </TouchableOpacity>
-
-            <View style={styles.paymentCard}>
-              <Text style={styles.cardLabel}>{t('voice.payment')}</Text>
-              <View style={styles.paymentGrid}>
-                {PAYMENT_OPTIONS.map(option => (
-                  <TouchableOpacity
-                    key={option.key}
-                    style={[styles.paymentOption, payment === option.key && styles.paymentOptionActive]}
-                    onPress={() => setPayment(option.key)}
-                  >
-                    <Ionicons
-                      name={option.icon as any}
-                      size={20}
-                      color={payment === option.key ? Tokens['on-primary'] : Tokens['on-surface-variant']}
-                    />
-                    <Text style={[styles.paymentLabel, payment === option.key && styles.paymentLabelActive]}>
-                      {t(option.labelKey)}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-              {payment === 'credit' && !parsedCustomer ? (
-                <View style={styles.udhaarActions}>
-                  <View style={styles.customerHint}>
-                    <Ionicons name="alert-circle-outline" size={14} color={Tokens.tertiary} />
-                    <Text style={styles.customerHintText}>
-                      {customerName
-                        ? t('voice.customerNotFound', { name: customerName })
-                        : t('voice.udhaarNeedsCustomer')}
-                    </Text>
-                  </View>
-                  <View style={styles.udhaarActionRow}>
-                    {customerName ? (
-                      <TouchableOpacity
-                        style={styles.udhaarBtn}
-                        onPress={() => createCustomer()}
-                        disabled={creatingCustomer}
-                      >
-                        {creatingCustomer ? (
-                          <Loader size={20} color={Tokens['on-primary']} />
-                        ) : (
-                          <>
-                            <Ionicons name="person-add" size={16} color={Tokens['on-primary']} />
-                            <Text style={styles.udhaarBtnText} numberOfLines={1}>
-                              {t('voice.createCustomer')}
-                            </Text>
-                          </>
-                        )}
-                      </TouchableOpacity>
-                    ) : null}
-                    <TouchableOpacity style={styles.udhaarBtnOutline} onPress={() => openPicker('customer')}>
-                      <Text style={styles.udhaarBtnOutlineText}>
-                        {customerName ? t('voice.selectExisting') : t('voice.chooseOrCreateCustomer')}
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              ) : null}
-            </View>
-
-            {discount ? (
-              <View style={styles.discountRow}>
-                <Ionicons name="pricetag" size={16} color={Tokens.tertiary} />
-                <Text style={styles.discountText}>
-                  {discount.type === 'percentage'
-                    ? t('voice.discountPercent', { value: discount.value })
-                    : t('voice.discountFixed', { value: formatMoney(discount.value) })}
-                </Text>
-                <TouchableOpacity onPress={() => setDiscount(null)}>
-                  <Text style={styles.discountClear}>{t('common.delete')}</Text>
-                </TouchableOpacity>
-              </View>
-            ) : null}
-
-            <View style={styles.summaryCard}>
-              <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>{t('bill.subtotal')}</Text>
-                <Text style={styles.summaryValue}>₹{formatMoney(subtotal)}</Text>
-              </View>
-              {discountAmount > 0 && (
-                <View style={styles.summaryRow}>
-                  <Text style={styles.summaryLabel}>{t('bill.discount')}</Text>
-                  <Text style={[styles.summaryValue, { color: Tokens.secondary }]}>
-                    -₹{formatMoney(discountAmount)}
-                  </Text>
-                </View>
-              )}
-              {taxAmount > 0 && (
-                <View style={styles.summaryRow}>
-                  <Text style={styles.summaryLabel}>{t('bill.gst')}</Text>
-                  <Text style={styles.summaryValue}>₹{formatMoney(taxAmount)}</Text>
-                </View>
-              )}
-              <View style={[styles.summaryRow, styles.totalRow]}>
-                <Text style={styles.totalLabel}>{t('bill.grandTotal')}</Text>
-                <Text style={styles.totalValue}>₹{formatMoney(grandTotal)}</Text>
-              </View>
-            </View>
-
-            {notReadyCount > 0 ? (
-              <View style={styles.unresolvedHint}>
-                <Ionicons name="information-circle-outline" size={16} color={Tokens.tertiary} />
-                <Text style={styles.unresolvedHintText}>
-                  {t('voice.unresolvedHint', { count: notReadyCount })}
-                </Text>
-              </View>
-            ) : null}
-          </View>
+        {transcript.trim().length > 0 && !listening && !processing && !items.length && (
+          <TouchableOpacity
+            style={[styles.parseBtn, styles.parseBtnManual]}
+            onPress={() => void parseText(transcript)}
+            activeOpacity={0.9}
+          >
+            <Text style={styles.parseBtnText}>{t('voice.understand')}</Text>
+            <Ionicons name="sparkles" size={18} color={Tokens['on-primary']} />
+          </TouchableOpacity>
         )}
       </ScrollView>
 
-      {items.length > 0 ? (
-        <View style={[styles.bottomBar, { paddingBottom: insets.bottom + Spacing.sm }]}>
-          {error ? (
-            <Text style={styles.bottomError} numberOfLines={2}>
-              {error}
-            </Text>
-          ) : null}
-          <View style={styles.bottomRow}>
-            <View style={styles.bottomSummary}>
-              <Text style={styles.bottomLabel}>{t('bill.amountToCollect')}</Text>
-              <Text style={styles.bottomAmount}>₹{formatMoney(grandTotal)}</Text>
-            </View>
-            <TouchableOpacity
-              style={[styles.createBtn, !canReview && styles.btnDisabled]}
-              onPress={handleReview}
-              disabled={!canReview}
-              activeOpacity={0.9}
-            >
-              <Text style={styles.createBtnText}>{t('bill.reviewBill')}</Text>
-              <Ionicons name="arrow-forward-circle" size={18} color={Tokens['on-primary']} />
-            </TouchableOpacity>
-          </View>
+      <Animated.View
+        style={[styles.fullScreenLoader, { opacity: fadeAnim, transform: [{ scale: scaleAnim }] }]}
+        pointerEvents={processing ? 'auto' : 'none'}
+      >
+        <View style={styles.loaderContent}>
+          <Animated.View style={styles.loaderRing}>
+            <Ionicons name="mic-circle" size={60} color={Tokens.secondary} style={[styles.loaderIcon, { transform: [{ rotate: loaderRotate }] }]} />
+          </Animated.View>
+          <Text style={styles.loaderText}>{processingText}</Text>
+          <Text style={styles.loaderSubtext}>{t('voice.pleaseWait')}</Text>
         </View>
-      ) : null}
+      </Animated.View>
 
       <Modal visible={picker.visible} transparent animationType="slide" onRequestClose={closePicker}>
         <View style={styles.modalOverlay}>
@@ -957,22 +818,36 @@ const styles = StyleSheet.create({
   exampleText: { fontSize: Typography['label-md'].fontSize, color: Tokens['on-tertiary-fixed-variant'], flex: 1 },
   micSection: { alignItems: 'center', gap: 8, paddingVertical: Spacing.sm },
   micButton: {
-    width: 96, height: 96, borderRadius: 48, backgroundColor: Tokens['primary-container'],
+    width: 100, height: 100, borderRadius: 50,
+    backgroundColor: Tokens['primary-container'],
     alignItems: 'center', justifyContent: 'center',
-    shadowColor: Tokens['primary-container'], shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.3, shadowRadius: 14, elevation: 6,
+    shadowColor: Tokens['primary-container'], shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3, shadowRadius: 20, elevation: 8,
   },
-  micButtonActive: { backgroundColor: '#dc2626', shadowColor: '#dc2626' },
+  micButtonInner: {
+    width: '100%', height: '100%', borderRadius: 50,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  pulseRing: {
+    position: 'absolute', top: -8, left: -8, right: -8, bottom: -8,
+    borderRadius: 58, borderWidth: 2, borderColor: Tokens.secondary,
+  },
   micLabel: {
     fontSize: Typography['label-lg'].fontSize,
     fontWeight: Typography['label-lg'].fontWeight as any,
     color: Tokens['on-surface-variant'],
   },
-  micLabelActive: { color: '#dc2626' },
+  micLabelActive: { color: Tokens.secondary },
   interimText: {
     fontSize: Typography['body-md'].fontSize, color: Tokens['on-surface-variant'],
     fontStyle: 'italic', textAlign: 'center', paddingHorizontal: Spacing.md,
   },
+  pauseIndicator: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingHorizontal: 12, paddingVertical: 6,
+    backgroundColor: Tokens['secondary-container'], borderRadius: BorderRadius.full,
+  },
+  pauseText: { fontSize: Typography['label-md'].fontSize, color: Tokens['on-secondary-container'] },
   transcriptCard: {
     backgroundColor: Tokens['surface-container-lowest'], borderRadius: BorderRadius.xl,
     padding: Spacing.md, gap: Spacing.sm,
@@ -996,6 +871,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
     height: 52, borderRadius: BorderRadius.xl, backgroundColor: Tokens.secondary,
   },
+  parseBtnManual: { marginTop: Spacing.sm },
   parseBtnText: {
     fontSize: Typography['label-lg'].fontSize,
     fontWeight: Typography['label-lg'].fontWeight as any,
@@ -1007,168 +883,26 @@ const styles = StyleSheet.create({
     backgroundColor: Tokens['tertiary-fixed'], borderRadius: BorderRadius.xl, padding: Spacing.md,
   },
   errorText: { fontSize: Typography['body-md'].fontSize, color: Tokens['on-tertiary-fixed-variant'], flex: 1 },
-  draftSection: { gap: Spacing.sm },
-  draftHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  sectionTitle: {
-    fontSize: Typography['headline-sm'].fontSize,
-    fontWeight: Typography['headline-sm'].fontWeight as any,
-    color: Tokens['on-surface'],
+  fullScreenLoader: {
+    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center',
+    zIndex: 1000,
   },
-  sourceBadge: {
-    flexDirection: 'row', alignItems: 'center', gap: 3,
-    backgroundColor: Tokens['secondary-container'], borderRadius: BorderRadius.full,
-    paddingHorizontal: 8, paddingVertical: 3,
-  },
-  sourceBadgeText: {
-    fontSize: 10, fontWeight: '700', color: Tokens['on-secondary-container'],
-    textTransform: 'uppercase',
-  },
-  assistantCard: {
-    flexDirection: 'row', alignItems: 'flex-start', gap: 8,
-    backgroundColor: Tokens['secondary-container'], borderRadius: BorderRadius.xl,
-    padding: Spacing.sm,
-  },
-  assistantText: { fontSize: Typography['body-md'].fontSize, color: Tokens['on-secondary-container'], flex: 1 },
-  itemCard: {
-    flexDirection: 'row', alignItems: 'center', gap: Spacing.sm,
-    backgroundColor: Tokens['surface-container-lowest'], borderRadius: BorderRadius.xl,
-    padding: Spacing.sm,
-    shadowColor: Tokens['surface-tint'], shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08, shadowRadius: 8, elevation: 1,
-  },
-  itemStatus: {
-    width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center',
-  },
-  itemStatusOk: { backgroundColor: Tokens['secondary-fixed'] },
-  itemStatusWarn: { backgroundColor: Tokens['tertiary-fixed'] },
-  itemBody: { flex: 1, minWidth: 0, gap: 2 },
-  itemName: { fontSize: Typography['body-md'].fontSize, fontWeight: '600', color: Tokens['on-surface'] },
-  itemMeta: { fontSize: Typography['label-md'].fontSize, color: Tokens['on-surface-variant'] },
-  priceInput: {
-    height: 38, borderRadius: BorderRadius.lg, backgroundColor: Tokens['surface'],
-    paddingHorizontal: Spacing.sm, fontSize: Typography['body-md'].fontSize,
-    color: Tokens['on-surface'], borderWidth: 1, borderColor: Tokens['outline-variant'],
-  },
-  chooseProductBtn: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 2 },
-  chooseProductText: { fontSize: Typography['label-md'].fontSize, fontWeight: '600', color: Tokens.secondary },
-  itemRight: { alignItems: 'flex-end', gap: 4 },
-  qtyRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  qtyBtn: {
-    width: 26, height: 26, borderRadius: 13, backgroundColor: Tokens['surface-container'],
-    alignItems: 'center', justifyContent: 'center',
-  },
-  qtyValue: { fontSize: Typography['body-md'].fontSize, fontWeight: '600', color: Tokens['on-surface'], minWidth: 20, textAlign: 'center' },
-  itemTotal: { fontSize: Typography['body-md'].fontSize, fontWeight: '700', color: Tokens['on-surface'] },
-  removeBtn: { padding: 4 },
-  customerCard: {
-    flexDirection: 'row', alignItems: 'center', gap: Spacing.sm,
-    backgroundColor: Tokens['surface-container-lowest'], borderRadius: BorderRadius.xl,
-    padding: Spacing.sm,
-    shadowColor: Tokens['surface-tint'], shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08, shadowRadius: 8, elevation: 1,
-  },
-  customerIcon: {
-    width: 36, height: 36, borderRadius: 12, backgroundColor: Tokens['secondary-fixed'],
-    alignItems: 'center', justifyContent: 'center',
-  },
-  cardLabel: { fontSize: Typography['label-md'].fontSize, color: Tokens['on-surface-variant'] },
-  customerName: { fontSize: Typography['body-lg'].fontSize, fontWeight: '600', color: Tokens['on-surface'] },
-  changeCustomerText: { fontSize: Typography['label-md'].fontSize, fontWeight: '600', color: Tokens.secondary },
-  paymentCard: {
-    backgroundColor: Tokens['surface-container-lowest'], borderRadius: BorderRadius.xl,
-    padding: Spacing.sm, gap: Spacing.sm,
-  },
-  paymentGrid: { flexDirection: 'row', gap: 6 },
-  paymentOption: {
-    flex: 1, alignItems: 'center', gap: 4, paddingVertical: 8,
-    borderRadius: BorderRadius.lg, backgroundColor: Tokens['surface-container-low'],
-    borderWidth: 1, borderColor: Tokens['outline-variant'],
-  },
-  paymentOptionActive: {
-    backgroundColor: Tokens['primary-container'], borderColor: Tokens['primary-container'],
-  },
-  paymentLabel: {
-    fontSize: Typography['label-md'].fontSize,
-    fontWeight: Typography['label-md'].fontWeight as any,
-    color: Tokens['on-surface-variant'],
-  },
-  paymentLabelActive: { color: Tokens['on-primary'] },
-  customerHint: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    backgroundColor: Tokens['tertiary-fixed'], borderRadius: BorderRadius.lg, padding: 8,
-  },
-  customerHintText: {
-    fontSize: Typography['label-md'].fontSize, color: Tokens['on-tertiary-fixed-variant'], flex: 1,
-  },
-  udhaarActions: { gap: 6 },
-  udhaarActionRow: { flexDirection: 'row', gap: 6 },
-  udhaarBtn: {
-    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
-    height: 40, borderRadius: BorderRadius.lg, backgroundColor: Tokens['primary-container'],
-    paddingHorizontal: Spacing.sm,
-  },
-  udhaarBtnText: {
-    fontSize: Typography['label-md'].fontSize, fontWeight: '600',
-    color: Tokens['on-primary'], flexShrink: 1,
-  },
-  udhaarBtnOutline: {
-    flex: 1, alignItems: 'center', justifyContent: 'center',
-    height: 40, borderRadius: BorderRadius.lg,
-    borderWidth: 1, borderColor: Tokens['outline-variant'],
-  },
-  udhaarBtnOutlineText: {
-    fontSize: Typography['label-md'].fontSize, fontWeight: '600', color: Tokens['on-surface-variant'],
-  },
-  discountRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    backgroundColor: Tokens['tertiary-fixed'], borderRadius: BorderRadius.xl, padding: Spacing.sm,
-  },
-  discountText: { fontSize: Typography['body-md'].fontSize, color: Tokens['on-tertiary-fixed-variant'], flex: 1 },
-  discountClear: { fontSize: Typography['label-md'].fontSize, fontWeight: '700', color: Tokens.tertiary },
-  summaryCard: {
-    backgroundColor: Tokens['surface-container-lowest'], borderRadius: BorderRadius.xl,
-    padding: Spacing.md, gap: 6,
-  },
-  summaryRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  summaryLabel: { fontSize: Typography['body-md'].fontSize, color: Tokens['on-surface-variant'] },
-  summaryValue: { fontSize: Typography['body-lg'].fontSize, color: Tokens['on-surface'] },
-  totalRow: {
-    borderTopWidth: 1, borderTopColor: Tokens['outline-variant'], paddingTop: 6, marginTop: 2,
-  },
-  totalLabel: { fontSize: Typography['headline-sm'].fontSize, fontWeight: '700', color: Tokens['on-surface'] },
-  totalValue: { fontSize: Typography['headline-md'].fontSize, fontWeight: '700', color: Tokens.secondary },
-  unresolvedHint: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    backgroundColor: Tokens['tertiary-fixed'], borderRadius: BorderRadius.lg, padding: Spacing.sm,
-  },
-  unresolvedHintText: { fontSize: Typography['label-md'].fontSize, color: Tokens['on-tertiary-fixed-variant'], flex: 1 },
-  bottomBar: {
-    position: 'absolute', left: 0, right: 0, bottom: 0,
+  loaderContent: {
+    alignItems: 'center', gap: Spacing.md,
+    padding: Spacing.xl, borderRadius: BorderRadius.xl,
     backgroundColor: Tokens['surface-container-lowest'],
-    paddingHorizontal: Spacing.gutter, paddingTop: Spacing.sm, gap: 6,
-    borderTopWidth: 1, borderTopColor: Tokens['outline-variant'],
-    shadowColor: Tokens['surface-tint'], shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.08, shadowRadius: 12, elevation: 8,
+    shadowColor: Tokens['surface-tint'], shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.2, shadowRadius: 30, elevation: 12,
   },
-  bottomRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md },
-  bottomError: {
-    fontSize: Typography['label-md'].fontSize, color: Tokens.error,
+  loaderRing: { width: 80, height: 80, borderRadius: 40, alignItems: 'center', justifyContent: 'center' },
+  loaderRingImg: { width: 80, height: 80 },
+  loaderIcon: { position: 'absolute' },
+  loaderText: {
+    fontSize: Typography['headline-sm'].fontSize, fontWeight: '600', color: Tokens['on-surface'],
+    textAlign: 'center',
   },
-  bottomSummary: { flex: 1 },
-  bottomLabel: { fontSize: Typography['label-md'].fontSize, color: Tokens['on-surface-variant'] },
-  bottomAmount: {
-    fontSize: Typography['headline-sm'].fontSize, fontWeight: '700', color: Tokens['on-surface'],
-  },
-  createBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-    height: 52, paddingHorizontal: Spacing.lg, borderRadius: BorderRadius.xl,
-    backgroundColor: Tokens['primary-container'],
-  },
-  createBtnText: {
-    fontSize: Typography['label-lg'].fontSize,
-    fontWeight: Typography['label-lg'].fontWeight as any,
-    color: Tokens['on-primary'],
-  },
+  loaderSubtext: { fontSize: Typography['body-md'].fontSize, color: Tokens['on-surface-variant'] },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
   modalSheet: {
     maxHeight: '80%', backgroundColor: Tokens['surface-container-lowest'],
@@ -1200,4 +934,3 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
 });
-

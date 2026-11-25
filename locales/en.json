@@ -211,7 +211,10 @@
     "recognitionFailed": "Could not capture your voice. Please try again.",
     "addMoreItems": "Add more items by voice",
     "addedItems": "Items added",
-    "itemAdded": "item(s) added to bill"
+    "itemAdded": "item(s) added to bill",
+    "waitingForMore": "Waiting for more...",
+    "understandingBill": "Understanding your bill...",
+    "pleaseWait": "Please wait..."
   },
   "bill": {
     "newBill": "New Bill",
