@@ -660,7 +660,9 @@ export default function VoiceBillScreen() {
       >
         <View style={styles.loaderContent}>
           <Animated.View style={styles.loaderRing}>
-            <Ionicons name="mic-circle" size={60} color={Tokens.secondary} style={[styles.loaderIcon, { transform: [{ rotate: loaderRotate }] }]} />
+            <Animated.View style={{ transform: [{ rotate: loaderRotate }] }}>
+              <Ionicons name="mic-circle" size={60} color={Tokens.secondary} style={styles.loaderIcon} />
+            </Animated.View>
           </Animated.View>
           <Text style={styles.loaderText}>{processingText}</Text>
           <Text style={styles.loaderSubtext}>{t('voice.pleaseWait')}</Text>
