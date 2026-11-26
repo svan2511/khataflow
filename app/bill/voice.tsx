@@ -541,7 +541,7 @@ export default function VoiceBillScreen() {
 
   const loaderRotate = loaderAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [0, 2 * Math.PI],
+    outputRange: ['0deg', '360deg'],
   });
 
   return (
