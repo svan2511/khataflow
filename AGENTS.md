@@ -76,7 +76,7 @@ App Open → _layout (fonts + i18n init) → splash.tsx
 
 ## Key Features
 - **Billing**: 5% GST, PDF invoice with amount-in-words, WhatsApp sharing via Android intent
-- **Voice Billing**: `app/bill/voice.tsx` (entry: dashboard "Voice Bill" quick action) records Hindi/English speech with `expo-speech-recognition`; when recognition ends it auto-sends the transcript to `POST /api/voice/parse` via `api.parseVoiceBill()`. The backend resolves the shop catalog deterministically when every spoken item matches (`source: 'catalog'`, no Gemini) and only falls back to Gemini for unmatched items. If every item resolves (and credit has a matched customer), the parsed lines load into BillContext and the app goes straight to the same `/bill/review` screen used by manual billing, where the user taps Confirm & Generate (`POST /bills`). Otherwise it shows a fix-up draft (match product, manual price via `product_name` + `unit_price`, remove) with a Review Bill button — both paths end on `/bill/review`. Udhaar without a matched customer offers one-tap quick-create via `/customers/quick`. On API failure it falls back to `lib/voice-parser.ts` + `source: 'local'`.
+- **Voice Billing**: `app/bill/voice.tsx` (entry: dashboard "Voice Bill" quick action) records Hindi/English speech with `expo-speech-recognition`; when recognition ends it immediately sends the transcript to `POST /api/voice/parse` via `api.parseVoiceBill(..., catalogOnly = true)`. The app is in catalog-only mode for now: the backend resolves every spoken item against the shop catalog deterministically (`source: 'catalog'`, no Gemini). When all items resolve, they load into BillContext and the app replaces the voice screen with the same `/bill/review` screen used by manual billing, where the user taps Confirm & Generate (`POST /bills`). If any item is not in the catalog, the voice screen shows the missing names and stays put so the user can retry; the review screen's mic ("Add more items") uses the same catalog-only flow and merges resolved items. Udhaar without a matched customer is treated as cash so the review screen can still confirm. On API failure the app falls back to `lib/voice-parser.ts` + `source: 'local'`; the user can also edit the transcript and tap Understand Bill.
 - **Udhaar (Credit)**: Track customer credit, due amounts, payment recording
 - **Stock Management**: Real-time tracking, low-stock alerts
 - **Customers**: Search, credit history, quick add
@@ -97,7 +97,7 @@ App Open → _layout (fonts + i18n init) → splash.tsx
 - Fallback: `http://192.168.1.9:8000/api`
 - Production: `https://khata-flow-api.onrender.com/api`
 - 401 response → calls `forceSignOut()` set via `setUnauthorizedHandler`
-- Voice: `api.parseVoiceBill(token, transcript, 'hi'|'en')` → `POST /voice/parse`, returns `{items, customer, customer_name, payment_method, discount, notes, assistant_reply, source}`. The backend owns the Gemini key; the app never holds it. Free-tier backend may cold-start (~30-60s) after Render sleep.
+- Voice: `api.parseVoiceBill(token, transcript, 'hi'|'en', catalogOnly)` → `POST /voice/parse`, returns `{items, customer, customer_name, payment_method, discount, notes, assistant_reply, source}`. The app currently sends `catalogOnly = true`, so the backend matches only the shop catalog and returns `resolved: false` items for anything missing (no Gemini call). The backend owns the Gemini key; the app never holds it.
 
 ## Theme & Design
 - **Colors**: Material 3-inspired (primary, secondary, tertiary, error, surfaces)

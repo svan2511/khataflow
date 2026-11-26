@@ -196,14 +196,14 @@ export default function BillReviewScreen() {
     setVoiceError('');
 
     try {
-      const res = await api.parseVoiceBill(token, text, voiceLanguage);
+      const res = await api.parseVoiceBill(token, text, voiceLanguage, true);
       if (!voiceMountedRef.current) return;
       if (!res.data.items.length) { setVoiceError(t('voice.notUnderstood')); return; }
       mergeVoiceResult(res.data);
     } catch (e) {
       try {
         const [productsRes, customersRes] = await Promise.all([
-          api.searchProducts(token, undefined, 200),
+          api.searchProducts(token, undefined, 100),
           api.searchCustomers(token, undefined, 100),
         ]);
         if (!voiceMountedRef.current) return;
@@ -219,7 +219,20 @@ export default function BillReviewScreen() {
   };
 
   const mergeVoiceResult = (data: any) => {
-    data.items.forEach((item: any, index: number) => {
+    const resolvedItems = (data.items ?? []).filter(
+      (item: any) => item.resolved && item.product_uuid,
+    );
+    const missing = (data.items ?? [])
+      .filter((item: any) => !item.resolved || !item.product_uuid)
+      .map((item: any) => item.spoken_name || item.name)
+      .filter(Boolean);
+
+    if (missing.length > 0) {
+      setVoiceError(t('voice.itemsNotFound', { items: missing.join(', ') }));
+    }
+    if (resolvedItems.length === 0) return;
+
+    resolvedItems.forEach((item: any, index: number) => {
       const productUuid = item.product_uuid;
       const itemName = item.name?.toLowerCase().trim();
       
@@ -265,7 +278,7 @@ export default function BillReviewScreen() {
 
     updateVoiceTranscript('');
     updateVoiceInterim('');
-    showToast({ type: 'success', title: t('voice.addedItems'), message: `${data.items.length} ${t('voice.itemAdded')}` });
+    showToast({ type: 'success', title: t('voice.addedItems'), message: `${resolvedItems.length} ${t('voice.itemAdded')}` });
   };
 
   const dueAmount = Math.max(0, grandTotal - paidAmount);
@@ -413,7 +426,10 @@ export default function BillReviewScreen() {
 
           {paymentMode !== 'Udhaar' && (
             <View style={styles.paidSection}>
-              <Text style={styles.paidSectionTitle}><Ionicons name="card" size={18} color={Tokens.secondary} style={{marginRight: 6}} /> {t('bill.amountPaid')}</Text>
+              <View style={styles.paidSectionTitle}>
+                <Ionicons name="card" size={18} color={Tokens.secondary} style={{marginRight: 6}} />
+                <Text style={styles.paidSectionTitleText}>{t('bill.amountPaid')}</Text>
+              </View>
               <View style={styles.paidInputContainer}>
                 <Text style={styles.paidCurrencySign}>₹</Text>
                 <TextInput style={styles.paidInput} value={paidInput} onChangeText={t => setPaidInput(t.replace(/[^0-9.]/g, ''))} onSubmitEditing={confirmPaidInput} onEndEditing={confirmPaidInput} keyboardType="decimal-pad" returnKeyType="done" placeholder="0" placeholderTextColor={Tokens['outline-variant']} selectTextOnFocus />
@@ -513,6 +529,7 @@ const styles = StyleSheet.create({
   pauseIndicatorText: { fontSize: Typography['label-md'].fontSize, color: Tokens['on-secondary-container'] },
   paidSection: { backgroundColor: Tokens['surface-container-lowest'], borderRadius: BorderRadius.xl, padding: Spacing.md, shadowColor: Tokens['surface-tint'], shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.12, shadowRadius: 20, elevation: 3 },
   paidSectionTitle: { fontSize: Typography['label-lg'].fontSize, fontWeight: Typography['label-lg'].fontWeight as any, color: Tokens['on-surface'], marginBottom: Spacing.sm, flexDirection: 'row', alignItems: 'center' },
+  paidSectionTitleText: { fontSize: Typography['label-lg'].fontSize, fontWeight: Typography['label-lg'].fontWeight as any, color: Tokens['on-surface'] },
   paidInputContainer: { flexDirection: 'row', alignItems: 'center', height: 56, backgroundColor: Tokens['surface'], borderRadius: BorderRadius.xl, borderWidth: 2, borderColor: Tokens['primary-container'], paddingHorizontal: Spacing.md, gap: 4 },
   paidCurrencySign: { fontSize: Typography['headline-md'].fontSize, fontWeight: '700', color: Tokens['on-surface'], marginRight: 4 },
   paidInput: { flex: 1, height: '100%', fontSize: Typography['headline-md'].fontSize, fontWeight: '700', color: Tokens['on-surface'], paddingVertical: 0 },

@@ -599,10 +599,15 @@ export const api = {
     }, token);
   },
 
-  parseVoiceBill(token: string, transcript: string, language: 'hi' | 'en' = 'hi') {
+  parseVoiceBill(
+    token: string,
+    transcript: string,
+    language: 'hi' | 'en' = 'hi',
+    catalogOnly = false,
+  ) {
     return request<VoiceParseResult>('/voice/parse', {
       method: 'POST',
-      body: JSON.stringify({ transcript, language }),
+      body: JSON.stringify({ transcript, language, catalog_only: catalogOnly }),
     }, token);
   },
 

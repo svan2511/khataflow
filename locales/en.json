@@ -175,6 +175,7 @@
     "parsing": "Understanding...",
     "speakFirst": "Speak or type the bill first.",
     "notUnderstood": "Could not understand the bill. Please speak again clearly.",
+    "itemsNotFound": "These items are not in your shop: {{items}}. Add them in Inventory or speak again.",
     "parseFailed": "Something went wrong while parsing. Please try again.",
     "usedLocalFallback": "AI was unreachable, so a local draft was built. Please review the items.",
     "draft": "Bill Draft",
