@@ -213,6 +213,10 @@
     "addMoreItems": "Add more items by voice",
     "addedItems": "Items added",
     "itemAdded": "item(s) added to bill",
+    "billUpdated": "Bill updated",
+    "itemUpdated": "item(s) updated",
+    "itemRemoved": "item(s) removed from bill",
+    "gstUpdated": "GST updated",
     "waitingForMore": "Waiting for more...",
     "understandingBill": "Understanding your bill...",
     "pleaseWait": "Please wait..."

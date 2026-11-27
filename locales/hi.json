@@ -213,6 +213,10 @@
     "addMoreItems": "आवाज़ से और सामान जोड़ें",
     "addedItems": "सामान जुड़ गया",
     "itemAdded": "आइटम बिल में जुड़ गए",
+    "billUpdated": "बिल अपडेट हो गया",
+    "itemUpdated": "आइटम अपडेट हो गए",
+    "itemRemoved": "आइटम बिल से हट गए",
+    "gstUpdated": "GST अपडेट हो गया",
     "waitingForMore": "और सुनने का इंतज़ार...",
     "understandingBill": "आपका बिल समझा जा रहा है...",
     "pleaseWait": "कृपया प्रतीक्षा करें..."

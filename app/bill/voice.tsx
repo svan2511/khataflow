@@ -20,14 +20,16 @@ import { ExpoSpeechRecognitionModule, useSpeechRecognitionEvent } from 'expo-spe
 import { Tokens, Typography, Spacing, BorderRadius } from '@/constants/theme';
 import { useAuth } from '@/lib/auth-context';
 import { api, apiErrorMessage, type VoiceParseResult } from '@/lib/api';
-import { parseBillLocally } from '@/lib/voice-parser';
+import { parseBillLocally, extractGstCommands, preprocessQuantityUpdates, preprocessDeleteCommands } from '@/lib/voice-parser';
 import { useBill } from '@/lib/bill-context';
 import { getCurrentLanguage } from '@/lib/i18n';
+import Loader from '@/components/Loader';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CONTEXTUAL_STRINGS = [
   'chai', 'tea', 'paratha', 'prantha', 'roti', 'lassi', 'raita', 'momos',
   'atta', 'doodh', 'chawal', 'dal', 'cheeni', 'udhaar', 'UPI', 'cash',
+  'gobhi', 'paratha', 'gst', 'percent', 'remove', 'delete', 'hatao', 'lagao', 'add', 'set', 'change', 'update', 'quantity', 'price', 'rate',
 ];
 
 export default function VoiceBillScreen() {
@@ -44,12 +46,13 @@ export default function VoiceBillScreen() {
   } = useBill();
 
   const [language, setLanguage] = useState<'hi' | 'en'>(() => (getCurrentLanguage() === 'en' ? 'en' : 'hi'));
-  const [listening, setListening] = useState(false);
+  const [recording, setRecording] = useState(false);
   const [transcript, setTranscript] = useState('');
   const [interim, setInterim] = useState('');
   const [processing, setProcessing] = useState(false);
   const [processingText, setProcessingText] = useState('');
   const [error, setError] = useState('');
+  const [showSendButton, setShowSendButton] = useState(false);
 
   const transcriptRef = useRef('');
   const interimRef = useRef('');
@@ -65,8 +68,8 @@ export default function VoiceBillScreen() {
   const loaderTextAnim = useRef(new Animated.Value(0)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(1)).current;
-  const micPressAnim = useRef(new Animated.Value(1)).current;
   const waveAnim = useRef(new Animated.Value(0)).current;
+  const sendButtonAnim = useRef(new Animated.Value(0)).current;
   const heroAnim = useRef(new Animated.Value(0)).current;
 
   const updateTranscript = useCallback((value: string) => {
@@ -87,9 +90,9 @@ export default function VoiceBillScreen() {
       easing: Easing.inOut(Easing.ease),
       useNativeDriver: true,
     }).start(({ finished }) => {
-      if (finished && listening) startPulseAnimation();
+      if (finished && recording) startPulseAnimation();
     });
-  }, [listening]);
+  }, [recording]);
 
   const startLoaderAnimations = useCallback(() => {
     loaderRingAnim1.setValue(0);
@@ -184,35 +187,87 @@ export default function VoiceBillScreen() {
     setError('');
     showLoader(t('voice.understandingBill'));
 
+    const gstExtraction = extractGstCommands(text);
+    let processedText = preprocessQuantityUpdates(gstExtraction.text);
+    processedText = preprocessDeleteCommands(processedText);
+
+    const hasSpecialCommands = processedText !== gstExtraction.text || gstExtraction.updates.length > 0;
+    const hasProductText = processedText.trim().length >= 2;
+
+    const emptyResult: VoiceParseResult = {
+      items: [],
+      deleteItems: [],
+      gstUpdates: [],
+      customer: null,
+      customer_name: '',
+      payment_method: 'cash',
+      discount: null,
+      notes: '',
+      assistant_reply: '',
+      source: 'local',
+    };
+
+    let parseResult: VoiceParseResult | null = null;
+
     try {
-      const res = await api.parseVoiceBill(token, text, language, true);
+      if (hasProductText) {
+        if (hasSpecialCommands) {
+          const [productsRes, customersRes] = await Promise.all([
+            api.searchProducts(token, undefined, 100),
+            api.searchCustomers(token, undefined, 100),
+          ]);
+          if (!mountedRef.current) return;
+          parseResult = parseBillLocally(processedText, language, productsRes.data, customersRes.data);
+        } else {
+          const res = await api.parseVoiceBill(token, gstExtraction.text, language, true);
+          if (!mountedRef.current) return;
+          parseResult = res.data;
+        }
+      }
+
       if (!mountedRef.current) return;
-      const missing = unresolvedNames(res.data);
-      if (missing.length > 0) { hideLoader(); setError(t('voice.itemsNotFound', { items: missing.join(', ') })); return; }
-      hideLoader();
-      goToReview(res.data);
-    } catch (e) {
+
+      const hasParsedWork = !!parseResult
+        && (parseResult.items.length > 0 || (parseResult.deleteItems?.length ?? 0) > 0);
+      if (!hasParsedWork && gstExtraction.updates.length === 0) {
+        hideLoader();
+        setError(t('voice.notUnderstood'));
+        return;
+      }
+      goToReview(parseResult ?? emptyResult);
+    } catch {
+      if (!hasProductText) {
+        if (gstExtraction.updates.length > 0) {
+          goToReview(emptyResult);
+        } else {
+          hideLoader();
+          setError(t('voice.notUnderstood'));
+        }
+        return;
+      }
       try {
         const [productsRes, customersRes] = await Promise.all([
           api.searchProducts(token, undefined, 100),
           api.searchCustomers(token, undefined, 100),
         ]);
         if (!mountedRef.current) return;
-        const local = parseBillLocally(text, language, productsRes.data, customersRes.data);
-        const missing = unresolvedNames(local);
-        if (local.items.length > 0 && missing.length === 0) { hideLoader(); goToReview(local); }
-        else { hideLoader(); setError(missing.length > 0 ? t('voice.itemsNotFound', { items: missing.join(', ') }) : apiErrorMessage(e, t('voice.parseFailed'))); }
-      } catch {
-        if (mountedRef.current) { hideLoader(); setError(apiErrorMessage(e, t('voice.parseFailed'))); }
-      }
-    } finally { parsingRef.current = false; }
+        const local = parseBillLocally(hasSpecialCommands ? processedText : text, language, productsRes.data, customersRes.data);
+        const hasLocalWork = local.items.length > 0 || local.deleteItems?.length > 0 || gstExtraction.updates.length > 0;
+        if (hasLocalWork) goToReview(local);
+        else { hideLoader(); setError(t('voice.notUnderstood')); }
+      } catch (err) { if (mountedRef.current) { hideLoader(); setError(apiErrorMessage(err, t('voice.parseFailed'))); } }
+    } finally {
+      parsingRef.current = false;
+    }
   }, [token, language, t, showLoader, hideLoader, goToReview]);
 
   useSpeechRecognitionEvent('start', () => {
     speechErrorRef.current = false;
-    setListening(true);
+    setRecording(true);
+    setShowSendButton(true);
     startPulseAnimation();
     Animated.timing(waveAnim, { toValue: 1, duration: 800, easing: Easing.inOut(Easing.ease), useNativeDriver: true }).start();
+    updateInterim('');
   });
 
   useSpeechRecognitionEvent('result', event => {
@@ -227,7 +282,7 @@ export default function VoiceBillScreen() {
   });
 
   useSpeechRecognitionEvent('end', () => {
-    setListening(false);
+    setRecording(false);
     pulseAnim.stopAnimation();
     waveAnim.stopAnimation();
     waveAnim.setValue(0);
@@ -236,14 +291,11 @@ export default function VoiceBillScreen() {
       updateInterim('');
       updateTranscript(transcriptRef.current ? `${transcriptRef.current} ${pending}`.trim() : pending);
     }
-    if (!mountedRef.current || speechErrorRef.current) return;
-    const text = transcriptRef.current.trim();
-    if (text.length >= 2) void parseText(text);
   });
 
   useSpeechRecognitionEvent('error', event => {
     speechErrorRef.current = true;
-    setListening(false);
+    setRecording(false);
     updateInterim('');
     waveAnim.stopAnimation();
     waveAnim.setValue(0);
@@ -259,6 +311,7 @@ export default function VoiceBillScreen() {
   useEffect(() => {
     mountedRef.current = true;
     Animated.timing(heroAnim, { toValue: 1, duration: 800, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+    Animated.timing(sendButtonAnim, { toValue: 1, duration: 500, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
     return () => {
       mountedRef.current = false;
       pulseAnim.stopAnimation();
@@ -271,22 +324,18 @@ export default function VoiceBillScreen() {
     };
   }, []);
 
-  const startNewCapture = () => {
-    updateTranscript('');
-    updateInterim('');
-    setError('');
-  };
-
-  const toggleListening = async () => {
-    if (listening) {
+  const toggleRecording = async () => {
+    if (recording) {
       try { ExpoSpeechRecognitionModule.stop(); } catch {}
-      setListening(false);
+      setRecording(false);
       return;
     }
     if (processing) return;
-    startNewCapture();
+    setError('');
+    updateInterim('');
     try {
       const permission = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
+      console.log('Mic permission:', permission);
       if (!permission.granted) {
         Alert.alert(t('voice.micPermissionTitle'), t('voice.micPermissionMessage'), [
           { text: t('common.cancel'), style: 'cancel' },
@@ -294,17 +343,37 @@ export default function VoiceBillScreen() {
         ]);
         return;
       }
+      console.log('Starting speech recognition...');
       ExpoSpeechRecognitionModule.start({
         lang: language === 'hi' ? 'hi-IN' : 'en-IN',
         interimResults: true, continuous: false, maxAlternatives: 1, addsPunctuation: true,
         contextualStrings: CONTEXTUAL_STRINGS,
       });
-      setListening(true);
-    } catch { setError(t('voice.recognitionFailed')); }
+      setRecording(true);
+    } catch (err) {
+      console.error('Speech recognition error:', err);
+      setError(t('voice.recognitionFailed'));
+    }
+  };
+
+  const handleSend = () => {
+    const finalText = transcriptRef.current.trim() || interimRef.current.trim();
+    if (finalText.length < 2) {
+      setError(t('voice.speakFirst'));
+      return;
+    }
+    setShowSendButton(false);
+    void parseText(finalText);
+  };
+
+  const startNewCapture = () => {
+    updateTranscript('');
+    updateInterim('');
+    setError('');
+    setShowSendButton(false);
   };
 
   const micScale = pulseAnim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [1, 1.12, 1] });
-  const micPressScale = micPressAnim.interpolate({ inputRange: [0, 1], outputRange: [0.85, 1] });
   const micShadow = pulseAnim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [20, 30, 20] });
   const micShadowOpacity = pulseAnim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0.2, 0.4, 0.2] });
   const waveOpacity = waveAnim.interpolate({ inputRange: [0, 1], outputRange: [0.6, 0] });
@@ -327,12 +396,14 @@ export default function VoiceBillScreen() {
 
   const heroFade = heroAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 1] });
   const heroTranslateY = heroAnim.interpolate({ inputRange: [0, 1], outputRange: [30, 0] });
+  const sendButtonScale = sendButtonAnim.interpolate({ inputRange: [0, 1], outputRange: [0.8, 1] });
+  const sendButtonOpacity = sendButtonAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 1] });
 
-  const canUnderstand = transcript.trim().length > 0 && !listening && !processing;
+  const displayText = transcript || interim;
+  const hasText = displayText.length > 0;
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
-      {/* Animated Background Blobs */}
       <Animated.View style={[styles.bgBlob1, { opacity: heroFade }]} />
       <Animated.View style={[styles.bgBlob2, { opacity: heroFade }]} />
 
@@ -381,8 +452,7 @@ export default function VoiceBillScreen() {
         </Animated.View>
 
         <View style={styles.micSection}>
-          {/* Sound waves when listening */}
-          {listening && (
+          {recording && (
             <>
               <Animated.View
                 pointerEvents="none"
@@ -408,22 +478,18 @@ export default function VoiceBillScreen() {
             </>
           )}
 
-          <Animated.View style={[styles.micButton, { transform: [{ scale: micPressScale }] }]}>
+          <Animated.View style={[styles.micButton, { transform: [{ scale: micScale }] }]}>
             <TouchableOpacity
               style={styles.micButtonInner}
-              onPress={toggleListening}
-              onPressIn={() => Animated.timing(micPressAnim, { toValue: 0, duration: 100, useNativeDriver: true }).start()}
-              onPressOut={() => Animated.timing(micPressAnim, { toValue: 1, duration: 150, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start()}
-              onLongPress={toggleListening}
+              onPress={toggleRecording}
               activeOpacity={0.85}
               accessibilityRole="button"
-              accessibilityLabel={listening ? t('voice.tapToStop') : t('voice.tapToSpeak')}
+              accessibilityLabel={recording ? t('voice.tapToStop') : t('voice.tapToSpeak')}
               disabled={processing}
-              hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
             >
-              <Ionicons name={listening ? 'stop' : 'mic'} size={42} color="#fff" />
+              <Ionicons name={recording ? 'stop' : 'mic'} size={42} color="#fff" />
             </TouchableOpacity>
-            {listening && (
+            {recording && (
               <Animated.View
                 style={[
                   styles.pulseRing,
@@ -439,32 +505,47 @@ export default function VoiceBillScreen() {
             />
           </Animated.View>
 
-          <Text style={[styles.micLabel, listening && styles.micLabelActive]}>
-            {listening ? t('voice.listening') : t('voice.tapToSpeak')}
+          <Text style={[styles.micLabel, recording && styles.micLabelActive]}>
+            {recording ? t('voice.listening') : t('voice.tapToSpeak')}
           </Text>
-          {interim && !processing && <Text style={styles.interimText}>{interim}</Text>}
-        </View>
 
-        <View style={styles.transcriptCard}>
-          <View style={styles.transcriptHeader}>
-            <Text style={styles.cardTitle}>{t('voice.transcript')}</Text>
-            {transcript.length > 0 && (
-              <TouchableOpacity onPress={startNewCapture} style={styles.clearBtn}>
-                <Ionicons name="refresh-outline" size={14} color={Tokens.secondary} />
-                <Text style={styles.clearBtnText}>{t('voice.clear')}</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-          <TextInput
-            style={styles.transcriptInput}
-            multiline
-            editable={!listening && !processing}
-            value={transcript}
-            onChangeText={updateTranscript}
-            placeholder={t('voice.transcriptPlaceholder')}
-            placeholderTextColor={Tokens['outline']}
-            textAlignVertical="top"
-          />
+          {recording && (
+            <Animated.View
+              style={[styles.liveTranscriptBar, { opacity: hasText ? 1 : 0 }]}
+            >
+              <Ionicons name="mic-outline" size={14} color={Tokens.secondary} />
+              <Text style={styles.liveTranscriptText} numberOfLines={2}>
+                {displayText}
+              </Text>
+            </Animated.View>
+          )}
+
+          {!recording && hasText && (
+            <View style={styles.transcriptPreview}>
+              <Text style={styles.transcriptPreviewLabel}>{t('voice.youSaid')}</Text>
+              <Text style={styles.transcriptPreviewText}>{transcript}</Text>
+              {interim && <Text style={styles.transcriptPreviewInterim}>{interim}</Text>}
+            </View>
+          )}
+
+          {hasText && !recording && (
+            <TouchableOpacity
+              style={[styles.sendBtn, { transform: [{ scale: sendButtonScale }], opacity: sendButtonOpacity }]}
+              onPress={handleSend}
+              activeOpacity={0.9}
+              disabled={processing}
+            >
+              <Text style={styles.sendBtnText}>{t('voice.send')}</Text>
+              <Ionicons name="send" size={20} color={Tokens['on-primary']} />
+            </TouchableOpacity>
+          )}
+
+          {hasText && !recording && (
+            <TouchableOpacity style={styles.clearBtn} onPress={startNewCapture}>
+              <Ionicons name="refresh-outline" size={16} color={Tokens.secondary} />
+              <Text style={styles.clearBtnText}>{t('voice.clear')}</Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         {error && (
@@ -472,17 +553,6 @@ export default function VoiceBillScreen() {
             <Ionicons name="alert-circle" size={18} color={Tokens.tertiary} />
             <Text style={styles.errorText}>{error}</Text>
           </View>
-        )}
-
-        {canUnderstand && (
-          <TouchableOpacity
-            style={[styles.parseBtn, styles.parseBtnManual]}
-            onPress={() => void parseText(transcript)}
-            activeOpacity={0.9}
-          >
-            <Text style={styles.parseBtnText}>{t('voice.understand')}</Text>
-            <Ionicons name="sparkles" size={18} color={Tokens['on-primary']} />
-          </TouchableOpacity>
         )}
       </ScrollView>
 
@@ -582,15 +652,13 @@ const styles = StyleSheet.create({
     width: 112, height: 112, borderRadius: 56,
     borderWidth: 2, borderColor: Tokens.secondary,
     alignSelf: 'center',
-    zIndex: 1,
   },
   micButton: {
     width: 112, height: 112, borderRadius: 56,
     backgroundColor: Tokens.secondary,
     alignItems: 'center', justifyContent: 'center',
-    shadowColor: Tokens.secondary, shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0, shadowRadius: 0, elevation: 0,
-    zIndex: 10,
+    shadowColor: Tokens.secondary, shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3, shadowRadius: 20, elevation: 8,
   },
   micButtonInner: {
     width: '100%', height: '100%', borderRadius: 56,
@@ -610,43 +678,39 @@ const styles = StyleSheet.create({
     color: Tokens['on-surface-variant'],
   },
   micLabelActive: { color: Tokens.secondary, fontWeight: '700' },
-  interimText: {
-    fontSize: Typography['body-md'].fontSize, color: Tokens['on-surface-variant'],
-    fontStyle: 'italic', textAlign: 'center', paddingHorizontal: Spacing.md,
+  liveTranscriptBar: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: Tokens['secondary-fixed'], borderRadius: BorderRadius.lg,
+    paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm,
+    marginTop: Spacing.sm, width: '90%',
   },
-  transcriptCard: {
+  liveTranscriptText: { fontSize: Typography['body-md'].fontSize, color: Tokens['on-secondary-fixed-variant'], flex: 1 },
+  transcriptPreview: {
     backgroundColor: Tokens['surface-container-lowest'], borderRadius: BorderRadius.xl,
-    padding: Spacing.md, gap: Spacing.sm,
-    shadowColor: Tokens['surface-tint'], shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.12, shadowRadius: 20, elevation: 3,
+    padding: Spacing.md, marginTop: Spacing.sm, width: '90%', alignSelf: 'center',
     borderWidth: 1, borderColor: Tokens['outline-variant'],
+    gap: Spacing.xs,
   },
-  transcriptHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  cardTitle: {
-    fontSize: Typography['label-lg'].fontSize,
-    fontWeight: Typography['label-lg'].fontWeight as any,
-    color: Tokens['on-surface'],
-  },
-  clearBtn: { flexDirection: 'row', alignItems: 'center', gap: 3 },
-  clearBtnText: { fontSize: Typography['label-md'].fontSize, fontWeight: '600', color: Tokens.secondary },
-  transcriptInput: {
-    minHeight: 96, fontSize: Typography['body-lg'].fontSize, color: Tokens['on-surface'],
-    backgroundColor: Tokens['surface'], borderRadius: BorderRadius.lg,
-    paddingHorizontal: Spacing.md, paddingVertical: Spacing.md,
-    borderWidth: 1, borderColor: Tokens['outline-variant'],
-  },
-  parseBtn: {
+  transcriptPreviewLabel: { fontSize: Typography['label-md'].fontSize, fontWeight: '600', color: Tokens['on-surface-variant'] },
+  transcriptPreviewText: { fontSize: Typography['body-md'].fontSize, color: Tokens['on-surface'] },
+  transcriptPreviewInterim: { fontSize: Typography['body-md'].fontSize, color: Tokens.secondary, fontStyle: 'italic' },
+  sendBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-    height: 56, borderRadius: BorderRadius.xl, backgroundColor: Tokens.secondary,
+    height: 52, borderRadius: BorderRadius.xl, backgroundColor: Tokens.secondary,
     shadowColor: Tokens.secondary, shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3, shadowRadius: 12, elevation: 6,
+    marginTop: Spacing.sm, width: '90%', alignSelf: 'center',
   },
-  parseBtnManual: { marginTop: Spacing.sm },
-  parseBtnText: {
+  sendBtnText: {
     fontSize: Typography['label-lg'].fontSize,
     fontWeight: Typography['label-lg'].fontWeight as any,
     color: Tokens['on-primary'],
   },
+  clearBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4,
+    marginTop: Spacing.sm, paddingVertical: Spacing.sm,
+  },
+  clearBtnText: { fontSize: Typography['label-md'].fontSize, fontWeight: '600', color: Tokens.secondary },
   errorCard: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
     backgroundColor: Tokens['tertiary-fixed'], borderRadius: BorderRadius.xl, padding: Spacing.md,

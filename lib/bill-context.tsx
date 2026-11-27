@@ -32,6 +32,7 @@ interface BillState {
 interface BillContextType extends BillState {
   addItem: (item: LineItem) => void;
   updateItemQuantity: (id: string, quantity: number) => void;
+  updateItemGstRate: (id: string, gstRate: number) => void;
   removeItem: (id: string) => void;
   setCustomer: (customer: Customer | null) => void;
   setPaymentMode: (mode: string) => void;
@@ -85,6 +86,10 @@ export function BillProvider({ children }: { children: ReactNode }) {
     setItems(prev => prev.filter(i => i.id !== id));
   }, []);
 
+  const updateItemGstRate = useCallback((id: string, gstRate: number) => {
+    setItems(prev => prev.map(i => (i.id === id ? { ...i, gstRate } : i)));
+  }, []);
+
   const resetBill = useCallback(() => {
     setItems([]);
     setCustomer(null);
@@ -117,6 +122,7 @@ export function BillProvider({ children }: { children: ReactNode }) {
         notes,
         addItem,
         updateItemQuantity,
+        updateItemGstRate,
         removeItem,
         setCustomer,
         setPaymentMode,

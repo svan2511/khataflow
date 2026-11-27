@@ -81,6 +81,9 @@ const STOPWORDS = new Set([
   'को', 'से', 'में', 'है', 'हैं', 'ना', 'भाई', 'जी', 'साहब', 'बिल', 'बनाओ',
   'बना', 'नया', 'आज', 'देना', 'देदो', 'चाहिए', 'रुपये', 'रुपए', 'डिस्काउंट',
   'छूट', 'कम', 'उधार', 'उधारी', 'क्रेडिट', 'नकद', 'बाकी', 'नाम',
+  'gst', 'जीएसटी', 'isme', 'ismein', 'इसमें', 'sath', 'saath', 'साथ', 'k',
+  'lagao', 'laga', 'lagado', 'lagade', 'lagana', 'apply', 'add', 'kardo', 'karo',
+  'karna', 'sab', 'sabhi', 'सब', 'सभी', 'प्रतिशत', 'फीसदी', 'फ़ीसदी',
 ]);
 
 function normalize(text: string): string {
@@ -204,24 +207,317 @@ function displayName(segment: string, fallback: string): string {
   return name.charAt(0).toUpperCase() + name.slice(1);
 }
 
+const QUANTITY_UPDATE_PATTERNS = [
+  // Hindi: "X ko Y kardo/karo/karna/banao"
+  /(\S.+?)\s+ko\s+(\S+?)\s+(kardo|karo|karna|karnaa|karnaa hai|banao|banana|bananaa)\b/gi,
+  // Hindi: "X Y kardo/karo" (without ko)
+  /(\S.+?)\s+(\S+?)\s+(kardo|karo|karna|banao)\b/gi,
+  // English: "make X Y", "set X to Y", "change X to Y", "X to Y"
+  /\b(make|set|change)\s+(\S.+?)\s+(to\s+)?(\S+)\b/gi,
+  /\b(\S.+?)\s+to\s+(\S+)\b/gi,
+];
+
+const DELETE_PATTERNS = [
+  // Hindi: "X remove kardo", "X delete kardo", "X hatao", "X hata do", "X remove karo"
+  /(\S.+?)\s+(remove|delete|hatao|hata\s*do|hata\s*do)\s*(kardo|karo|karna)?\b/gi,
+  // Hindi: "X ko remove kardo", "X ko delete kardo"
+  /(\S.+?)\s+ko\s+(remove|delete|hatao|hata\s*do)\s*(kardo|karo|karna)?\b/gi,
+  // English: "remove X", "delete X", "remove X from bill"
+  /\b(remove|delete)\s+(\S.+?)\b/gi,
+];
+
+const NUMBER_WORDS_REV: Record<string, string> = {
+  'ek': '1', 'ik': '1', 'एक': '1',
+  'do': '2', 'दो': '2',
+  'teen': '3', 'tin': '3', 'तीन': '3',
+  'char': '4', 'chaar': '4', 'चार': '4',
+  'paanch': '5', 'panch': '5', 'पांच': '5', 'पाँच': '5',
+  'chhe': '6', 'che': '6', 'छह': '6', 'छे': '6',
+  'saat': '7', 'सात': '7',
+  'aath': '8', 'आठ': '8',
+  'nau': '9', 'नौ': '9',
+  'das': '10', 'दस': '10',
+};
+
+function wordToNumber(word: string): string | null {
+  const normalized = word.toLowerCase().trim();
+  if (/^\d+$/.test(normalized)) return normalized;
+  return NUMBER_WORDS_REV[normalized] ?? null;
+}
+
+export function preprocessQuantityUpdates(transcript: string): string {
+  let processed = transcript;
+  
+  for (const pattern of QUANTITY_UPDATE_PATTERNS) {
+    processed = processed.replace(pattern, (match, ...groups) => {
+      let itemName = '';
+      let quantityWord = '';
+      
+      if (pattern.source.includes('ko\\s+')) {
+        // Hindi "X ko Y kardo" pattern: groups = [itemName, quantityWord, actionWord]
+        itemName = groups[0]?.trim() || '';
+        quantityWord = groups[1]?.trim() || '';
+      } else if (pattern.source.includes('make|set|change')) {
+        // English "make/set/change X Y" or "make/set/change X to Y"
+        // groups = [actionWord, itemName, 'to', quantityWord] or [actionWord, itemName, quantityWord]
+        itemName = groups[1]?.trim() || '';
+        quantityWord = groups[3]?.trim() || groups[2]?.trim() || '';
+      } else if (pattern.source.includes('to')) {
+        // "X to Y"
+        itemName = groups[0]?.trim() || '';
+        quantityWord = groups[1]?.trim() || '';
+      }
+      
+      const quantity = wordToNumber(quantityWord);
+      if (quantity && itemName) {
+        // Convert to "quantity itemName" format that the parser understands
+        return `${quantity} ${itemName}`;
+      }
+      return match;
+    });
+  }
+  
+  return processed;
+}
+
+export function preprocessDeleteCommands(transcript: string): string {
+  let processed = transcript;
+  
+  for (const pattern of DELETE_PATTERNS) {
+    processed = processed.replace(pattern, (match, ...groups) => {
+      let itemName = '';
+      
+      if (pattern.source.includes('remove|delete.*\\+')) {
+        // English "remove X", "delete X" - groups = [actionWord, itemName]
+        itemName = groups[1]?.trim() || '';
+      } else if (pattern.source.includes('ko\\s+')) {
+        // Hindi "X ko remove kardo" - groups = [itemName, actionWord, actionVerb?]
+        itemName = groups[0]?.trim() || '';
+      } else {
+        // Hindi "X remove kardo" - groups = [itemName, actionWord, actionVerb?]
+        itemName = groups[0]?.trim() || '';
+      }
+      
+      if (itemName) {
+        // Mark for deletion with special prefix
+        return `__DELETE__ ${itemName}`;
+      }
+      return match;
+    });
+  }
+  
+  return processed;
+}
+
+export interface GstUpdate {
+  itemName: string;
+  gstRate: number;
+}
+
+export interface GstExtraction {
+  text: string;
+  updates: GstUpdate[];
+}
+
+const GST_RATE_PATTERN = String.raw`(\d+(?:\.\d+)?)\s*(?:%|percent|pratishat|प्रतिशत|फीसदी|फ़ीसदी)?`;
+const GST_WORD_PATTERN = String.raw`(?:gst|जीएसटी)`;
+const GST_ACTION_WORD = String.raw`(?:add|apply|set|lagado|lagade|lagana|lagao|laga|kardo|karna|karo|kar|banao|dena|de|लगादो|लगाना|लगाओ|लगा|करदो|करो|कर|बनाओ|देना|दे)`;
+const GST_ACTION_PATTERN = String.raw`(?:(?:(?:${GST_ACTION_WORD})\s*)+(?:\d+(?:\.\d+)?\s*)?)?`;
+
+function clampGst(value: number): number {
+  return Math.max(0, Math.min(100, Math.round(value * 100) / 100));
+}
+
+function cleanGstItemName(value: string): string {
+  return value
+    .replace(/^\s*\d+(?:\.\d+)?\s+/, '')
+    .replace(/^(?:aur|and|or|ya|plus|with|और|या)\s+/i, '')
+    .replace(/\s+(?:aur|and|or|ya|plus|with|और|या)$/i, '')
+    .trim();
+}
+
+function splitGstItemNames(value: string): string[] {
+  return value
+    .split(/\s+(?:aur|and|or|ya|plus|with|और|या)\s+/i)
+    .map(part => cleanGstItemName(part))
+    .filter(Boolean);
+}
+
+const BILL_WIDE_WORDS = new Set([
+  'bill', 'बिल', 'is', 'इस', 'isme', 'ismein', 'इसमें',
+  'sab', 'sabhi', 'सब', 'सभी', 'all', 'poora', 'pure', 'pura', 'puri', 'पूरा', 'पूरे', 'पूरी',
+  'item', 'items', 'samaan', 'saman', 'सामान',
+]);
+
+function isBillWideName(value: string): boolean {
+  const words = normalize(value).split(' ').filter(Boolean);
+  return words.length > 0 && words.every(word => BILL_WIDE_WORDS.has(word));
+}
+
+/**
+ * Pull spoken GST commands out of a transcript.
+ *
+ * Returns the transcript with the GST phrases removed plus the per-item and
+ * bill-wide GST updates that were spoken. An update with an empty itemName
+ * applies to the whole bill.
+ */
+export function extractGstCommands(transcript: string): GstExtraction {
+  let text = replaceNumberWords(normalize(transcript));
+  const updates: GstUpdate[] = [];
+
+  const itemPatterns: Array<{ pattern: RegExp; itemGroup: number; rateGroup: number }> = [
+    {
+      // "chai me/mein/ko/par/pe 5% gst add kardo"
+      pattern: new RegExp(String.raw`([a-z\u0900-\u097F][a-z0-9\u0900-\u097F\s]*?)\s+(?:me|mein|ko|par|pe|में|को|पर|पे)\s+${GST_RATE_PATTERN}\s*(?:ka|ki|ke|k|का|की|के)?\s*${GST_WORD_PATTERN}\s*${GST_ACTION_PATTERN}`, 'gi'),
+      itemGroup: 1,
+      rateGroup: 2,
+    },
+    {
+      // "chai ka/ki gst 5% kardo"
+      pattern: new RegExp(String.raw`([a-z\u0900-\u097F][a-z0-9\u0900-\u097F\s]*?)\s+(?:ka|ki|ke|का|की|के)\s+${GST_WORD_PATTERN}\s*${GST_RATE_PATTERN}\s*${GST_ACTION_PATTERN}`, 'gi'),
+      itemGroup: 1,
+      rateGroup: 2,
+    },
+    {
+      // "add/set/apply 5% gst to/on/for chai"
+      pattern: new RegExp(String.raw`(?:add|apply|set)\s+${GST_RATE_PATTERN}\s*${GST_WORD_PATTERN}\s+(?:to|on|for)\s+([a-z\u0900-\u097F][a-z0-9\u0900-\u097F\s]*)`, 'gi'),
+      itemGroup: 2,
+      rateGroup: 1,
+    },
+    {
+      // "chai gst 5%"
+      pattern: new RegExp(String.raw`([a-z\u0900-\u097F][a-z0-9\u0900-\u097F\s]*?)\s+${GST_WORD_PATTERN}\s*${GST_RATE_PATTERN}\s*${GST_ACTION_PATTERN}`, 'gi'),
+      itemGroup: 1,
+      rateGroup: 2,
+    },
+  ];
+
+  for (const { pattern, itemGroup, rateGroup } of itemPatterns) {
+    text = text.replace(pattern, (_match, ...groups) => {
+      const itemValue = cleanGstItemName(String(groups[itemGroup - 1] ?? ''));
+      const rateValue = Number(groups[rateGroup - 1]);
+      if (itemValue && Number.isFinite(rateValue)) {
+        if (isBillWideName(itemValue)) {
+          updates.push({ itemName: '', gstRate: clampGst(rateValue) });
+        } else {
+          for (const itemName of splitGstItemNames(itemValue)) {
+            updates.push({ itemName, gstRate: clampGst(rateValue) });
+          }
+        }
+      }
+      return ' ';
+    });
+  }
+
+  const billPatterns = [
+    // "isme / bill me / sab par 5% gst add kardo"
+    new RegExp(String.raw`(?:isme|ismein|इसमें|इस\s*बिल|is\s*bill|bill\s*(?:me|mein|par)|बिल\s*(?:में|पर)|sab\s*(?:me|mein|par)|sabhi\s*(?:me|mein|par)|sab\s*par)?\s*${GST_RATE_PATTERN}\s*(?:ka|ki|ke|k|का|की|के)?\s*${GST_WORD_PATTERN}\s*${GST_ACTION_PATTERN}`, 'gi'),
+    // "gst 5%"
+    new RegExp(String.raw`${GST_WORD_PATTERN}\s*(?:ka|ki|ke|k)?\s*${GST_RATE_PATTERN}\s*${GST_ACTION_PATTERN}`, 'gi'),
+    // "5 gst" (percent word dropped by speech recognition)
+    new RegExp(String.raw`(\d+(?:\.\d+)?)\s*${GST_WORD_PATTERN}`, 'gi'),
+  ];
+
+  for (const pattern of billPatterns) {
+    text = text.replace(pattern, (_match, ...groups) => {
+      const rateValue = Number(groups[0]);
+      if (Number.isFinite(rateValue)) {
+        updates.push({ itemName: '', gstRate: clampGst(rateValue) });
+      }
+      return ' ';
+    });
+  }
+
+  const cleanedText = text
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/^(?:aur|and|or|ya|plus|with|और|या)(?:\s+|$)/i, '')
+    .trim();
+
+  return {
+    text: isBillWideName(cleanedText) ? '' : cleanedText,
+    updates,
+  };
+}
+
+function aliasSet(text: string): Set<string> {
+  const tokens = normalize(text).split(' ').filter(Boolean);
+  const found = new Set<string>(tokens);
+  for (const token of tokens) {
+    for (const [canonical, variants] of Object.entries(ALIASES)) {
+      if (token === canonical || variants.includes(token)) {
+        found.add(canonical);
+        for (const variant of variants) found.add(variant);
+      }
+    }
+  }
+  return found;
+}
+
+/**
+ * Match a spoken item name against an existing bill line, including the
+ * Hindi/Hinglish aliases used by the local parser (e.g. chai ~ Tea).
+ */
+export function itemNameMatches(existingName: string, spokenName: string): boolean {
+  const existing = normalize(existingName);
+  const spoken = normalize(spokenName);
+  if (!existing || !spoken) return false;
+  if (existing === spoken || existing.includes(spoken) || spoken.includes(existing)) return true;
+
+  const existingSet = aliasSet(existingName);
+  const spokenSet = aliasSet(spokenName);
+  for (const token of spokenSet) {
+    if (token.length >= 3 && existingSet.has(token)) return true;
+  }
+
+  return false;
+}
+
 export function parseBillLocally(
   transcript: string,
   language: Language,
   products: ProductData[],
   customers: CustomerData[],
 ): VoiceParseResult {
-  const paymentMethod = detectPayment(transcript);
-  const discount = detectDiscount(transcript);
-  const customer = matchCustomer(transcript, customers);
-  const segments = normalize(transcript)
+  // Pull GST commands out first so they never become items or discounts.
+  const gst = extractGstCommands(transcript);
+
+  // Preprocess quantity update commands like "chai ko chaar kardo" -> "4 chai"
+  let processedTranscript = preprocessQuantityUpdates(gst.text);
+  // Preprocess delete commands like "alu paratha remove kardo" -> "delete alu paratha"
+  processedTranscript = preprocessDeleteCommands(processedTranscript);
+
+  const paymentMethod = detectPayment(gst.text);
+  const discount = detectDiscount(gst.text);
+  const customer = matchCustomer(gst.text, customers);
+  const segments = normalize(processedTranscript)
     .split(/[,+&]|\baur\b|\band\b|\bor\b|\bya\b|\bke saath\b|\bwith\b|और|या/)
     .map(part => part.trim())
     .filter(Boolean);
 
   const items: VoiceParseItem[] = [];
   const byProduct = new Map<string, number>();
+  const deleteItems: string[] = [];
+  const billWideGst = [...gst.updates].reverse().find(update => !update.itemName)?.gstRate;
+
+  const gstRateFor = (productName: string): number => {
+    const itemUpdate = [...gst.updates].reverse().find(
+      update => update.itemName && itemNameMatches(productName, update.itemName),
+    );
+    if (itemUpdate) return itemUpdate.gstRate;
+    return billWideGst ?? 0;
+  };
 
   for (const segment of segments) {
+    // Check if this is a delete command (starts with "delete" after normalization)
+    if (segment.toLowerCase().startsWith('delete')) {
+      const itemName = segment.replace(/^delete\s+/i, '').trim();
+      if (itemName) {
+        deleteItems.push(itemName.toLowerCase());
+      }
+      continue;
+    }
+
     const tokens = tokenize(segment);
     if (!tokens.length) continue;
     const canonical = canonicalTokens(tokens);
@@ -242,7 +538,7 @@ export function parseBillLocally(
         price: Number(match.product.price) || 0,
         quantity,
         unit: unit ?? match.product.unit ?? 'piece',
-        gst_rate: 0,
+        gst_rate: gstRateFor(match.product.name),
         confidence: 0.6,
         resolved: true,
         spoken_name: clean || match.product.name,
@@ -259,7 +555,7 @@ export function parseBillLocally(
       price: 0,
       quantity,
       unit: unit ?? 'piece',
-      gst_rate: 0,
+      gst_rate: billWideGst ?? 0,
       confidence: 0.2,
       resolved: false,
       spoken_name: clean || segment,
@@ -268,6 +564,8 @@ export function parseBillLocally(
 
   return {
     items,
+    deleteItems,
+    gstUpdates: gst.updates,
     customer: customer
       ? { uuid: customer.id, name: customer.name, phone: customer.phone }
       : null,

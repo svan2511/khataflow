@@ -287,6 +287,8 @@ export interface VoiceParseItem {
 
 export interface VoiceParseResult {
   items: VoiceParseItem[];
+  deleteItems: string[];
+  gstUpdates: { itemName: string; gstRate: number }[];
   customer: { uuid: string; name: string; phone: string | null } | null;
   customer_name: string;
   payment_method: 'cash' | 'upi' | 'card' | 'credit' | 'mix';
