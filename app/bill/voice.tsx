@@ -335,7 +335,7 @@ export default function VoiceBillScreen() {
     updateInterim('');
     try {
       const permission = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
-      console.log('Mic permission:', permission);
+      console.log('Mic permission:', JSON.stringify(permission));
       if (!permission.granted) {
         Alert.alert(t('voice.micPermissionTitle'), t('voice.micPermissionMessage'), [
           { text: t('common.cancel'), style: 'cancel' },
@@ -352,7 +352,7 @@ export default function VoiceBillScreen() {
       setRecording(true);
     } catch (err) {
       console.error('Speech recognition error:', err);
-      setError(t('voice.recognitionFailed'));
+      setError(String(err));
     }
   };
 

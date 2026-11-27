@@ -8,4 +8,7 @@ export default ({ config }) => ({
     ...config.extra,
     apiUrl: API_URL,
   },
+  plugins: [
+    'expo-speech-recognition',
+  ],
 });
