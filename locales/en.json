@@ -219,7 +219,8 @@
     "gstUpdated": "GST updated",
     "waitingForMore": "Waiting for more...",
     "understandingBill": "Understanding your bill...",
-    "pleaseWait": "Please wait..."
+    "pleaseWait": "Please wait...",
+    "operationInProgress": "Operation in progress, please wait."
   },
   "bill": {
     "newBill": "New Bill",

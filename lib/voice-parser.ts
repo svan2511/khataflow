@@ -321,7 +321,7 @@ export interface GstExtraction {
 
 const GST_RATE_PATTERN = String.raw`(\d+(?:\.\d+)?)\s*(?:%|percent|pratishat|प्रतिशत|फीसदी|फ़ीसदी)?`;
 const GST_WORD_PATTERN = String.raw`(?:gst|जीएसटी)`;
-const GST_ACTION_WORD = String.raw`(?:add|apply|set|lagado|lagade|lagana|lagao|laga|kardo|karna|karo|kar|banao|dena|de|लगादो|लगाना|लगाओ|लगा|करदो|करो|कर|बनाओ|देना|दे)`;
+const GST_ACTION_WORD = String.raw`(?:add|apply|set|lagado|lagade|lagana|lagao|laga|kardo|karna|karo|kar|banao|dena|de|लगादो|लगाना|लगाओ|लगा|करदो|करो|कर|बनाओ|देना|दे|क\s+साथ|साथ|के\s+साथ)`;
 const GST_ACTION_PATTERN = String.raw`(?:(?:(?:${GST_ACTION_WORD})\s*)+(?:\d+(?:\.\d+)?\s*)?)?`;
 
 function clampGst(value: number): number {
@@ -390,14 +390,31 @@ export function extractGstCommands(transcript: string): GstExtraction {
       itemGroup: 1,
       rateGroup: 2,
     },
+{
+      // "item 5% gst k sath" or "item 5% gst saath" - per-item GST with item name
+      pattern: new RegExp(String.raw`([a-z\u0900-\u097F][a-z0-9\u0900-\u097F\s]*?)\s+(\d+(?:\.\d+)?)\s*(?:%|pratishat|फीसदी|फ़ीसदी)?\s*(?:gst|जीएसटी)\s*(?:k\s+saath|saath|के\s+साथ|साथ)`, 'gi'),
+      itemGroup: 1,
+      rateGroup: 2,
+    },
+    {
+      // "5% gst k sath" or "5% gst saath" - bill-wide GST without explicit item name
+      pattern: new RegExp(String.raw`${GST_RATE_PATTERN}\s*${GST_WORD_PATTERN}\s*(?:k\s+saath|saath|के\s+साथ|साथ)`, 'gi'),
+      itemGroup: -1,
+      rateGroup: 1,
+    },
   ];
 
   for (const { pattern, itemGroup, rateGroup } of itemPatterns) {
     text = text.replace(pattern, (_match, ...groups) => {
-      const itemValue = cleanGstItemName(String(groups[itemGroup - 1] ?? ''));
+      let itemValue = '';
+      if (itemGroup > 0 && itemGroup < groups.length) {
+        itemValue = cleanGstItemName(String(groups[itemGroup - 1] ?? ''));
+      }
       const rateValue = Number(groups[rateGroup - 1]);
-      if (itemValue && Number.isFinite(rateValue)) {
-        if (isBillWideName(itemValue)) {
+      if (Number.isFinite(rateValue)) {
+        if (itemGroup <= 0 || itemValue === '') {
+          updates.push({ itemName: '', gstRate: clampGst(rateValue) });
+        } else if (isBillWideName(itemValue)) {
           updates.push({ itemName: '', gstRate: clampGst(rateValue) });
         } else {
           for (const itemName of splitGstItemNames(itemValue)) {

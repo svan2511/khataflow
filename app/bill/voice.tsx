@@ -330,7 +330,6 @@ export default function VoiceBillScreen() {
       setRecording(false);
       return;
     }
-    if (processing) return;
     setError('');
     updateInterim('');
     try {
